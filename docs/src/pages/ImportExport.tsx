@@ -109,7 +109,7 @@ export default function ImportExportPage() {
 
       <h2>DXF (CAD export)</h2>
       <p>
-        <strong>Export DXF</strong> generates an AutoCAD R12 DXF file compatible with:
+        <strong>Export DXF</strong> generates an AutoCAD R2000 DXF file compatible with:
       </p>
       <ul>
         <li><strong>Vectorworks</strong> (primary target)</li>

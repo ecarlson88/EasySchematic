@@ -175,10 +175,11 @@ function parseSvgPath(d: string): { x: number; y: number }[] {
 }
 
 /**
- * Minimal R12 DXF writer (AC1009).
+ * R2000 DXF writer (AC1015).
  */
 class DxfWriter {
   private lines: string[] = [];
+  private handleCounter = 0;
 
   private write(code: number, value: string) {
     this.lines.push(`  ${code}`);
@@ -197,10 +198,17 @@ class DxfWriter {
     this.write(code, value);
   }
 
+  /** Emit a unique hex handle (group code 5). */
+  private handle() {
+    this.handleCounter++;
+    this.str(5, this.handleCounter.toString(16).toUpperCase());
+  }
+
   writeHeader(extMin: { x: number; y: number }, extMax: { x: number; y: number }) {
     this.str(0, "SECTION");
     this.str(2, "HEADER");
-    this.str(9, "$ACADVER"); this.str(1, "AC1009");
+    this.str(9, "$ACADVER"); this.str(1, "AC1015");
+    this.str(9, "$HANDSEED"); this.str(5, "FFFF");
     this.str(9, "$INSBASE");
     this.real(10, 0); this.real(20, 0); this.real(30, 0);
     this.str(9, "$EXTMIN");
@@ -208,6 +216,14 @@ class DxfWriter {
     this.str(9, "$EXTMAX");
     this.real(10, extMax.x); this.real(20, extMax.y); this.real(30, 0);
     this.str(9, "$CLAYER"); this.str(8, "0");
+    this.str(9, "$LTSCALE"); this.real(40, 1.0);
+    this.str(9, "$MEASUREMENT"); this.int(70, 1);
+    this.str(0, "ENDSEC");
+  }
+
+  writeClasses() {
+    this.str(0, "SECTION");
+    this.str(2, "CLASSES");
     this.str(0, "ENDSEC");
   }
 
@@ -215,44 +231,121 @@ class DxfWriter {
     this.str(0, "SECTION");
     this.str(2, "TABLES");
 
+    // VPORT table (required by R2000, even if empty)
+    this.str(0, "TABLE"); this.str(2, "VPORT"); this.handle();
+    this.str(100, "AcDbSymbolTable"); this.int(70, 0);
+    this.str(0, "ENDTAB");
+
     // LTYPE table
-    this.str(0, "TABLE"); this.str(2, "LTYPE"); this.int(70, 2);
-    this.str(0, "LTYPE"); this.str(2, "CONTINUOUS"); this.int(70, 0);
+    this.str(0, "TABLE"); this.str(2, "LTYPE"); this.handle();
+    this.str(100, "AcDbSymbolTable"); this.int(70, 2);
+    this.str(0, "LTYPE"); this.handle();
+    this.str(100, "AcDbSymbolTableRecord"); this.str(100, "AcDbLinetypeTableRecord");
+    this.str(2, "CONTINUOUS"); this.int(70, 0);
     this.str(3, "Solid line"); this.int(72, 65); this.int(73, 0); this.real(40, 0);
-    this.str(0, "LTYPE"); this.str(2, "DASHED"); this.int(70, 0);
+    this.str(0, "LTYPE"); this.handle();
+    this.str(100, "AcDbSymbolTableRecord"); this.str(100, "AcDbLinetypeTableRecord");
+    this.str(2, "DASHED"); this.int(70, 0);
     this.str(3, "Dashed"); this.int(72, 65); this.int(73, 2);
     this.real(40, 0.75); this.real(49, 0.5); this.real(49, -0.25);
     this.str(0, "ENDTAB");
 
     // LAYER table
-    this.str(0, "TABLE"); this.str(2, "LAYER"); this.int(70, layers.length);
+    this.str(0, "TABLE"); this.str(2, "LAYER"); this.handle();
+    this.str(100, "AcDbSymbolTable"); this.int(70, layers.length);
     for (const layer of layers) {
-      this.str(0, "LAYER"); this.str(2, layer.name); this.int(70, 0);
+      this.str(0, "LAYER"); this.handle();
+      this.str(100, "AcDbSymbolTableRecord"); this.str(100, "AcDbLayerTableRecord");
+      this.str(2, layer.name); this.int(70, 0);
       this.int(62, layer.color); this.str(6, layer.linetype ?? "CONTINUOUS");
     }
     this.str(0, "ENDTAB");
 
     // STYLE table
-    this.str(0, "TABLE"); this.str(2, "STYLE"); this.int(70, 1);
-    this.str(0, "STYLE"); this.str(2, "STANDARD"); this.int(70, 0);
+    this.str(0, "TABLE"); this.str(2, "STYLE"); this.handle();
+    this.str(100, "AcDbSymbolTable"); this.int(70, 1);
+    this.str(0, "STYLE"); this.handle();
+    this.str(100, "AcDbSymbolTableRecord"); this.str(100, "AcDbTextStyleTableRecord");
+    this.str(2, "STANDARD"); this.int(70, 0);
     this.real(40, 0); this.real(41, 1); this.real(50, 0);
     this.int(71, 0); this.real(42, 10);
     this.str(3, "txt"); this.str(4, "");
+    this.str(0, "ENDTAB");
+
+    // VIEW table (required, empty)
+    this.str(0, "TABLE"); this.str(2, "VIEW"); this.handle();
+    this.str(100, "AcDbSymbolTable"); this.int(70, 0);
+    this.str(0, "ENDTAB");
+
+    // UCS table (required, empty)
+    this.str(0, "TABLE"); this.str(2, "UCS"); this.handle();
+    this.str(100, "AcDbSymbolTable"); this.int(70, 0);
+    this.str(0, "ENDTAB");
+
+    // APPID table (required)
+    this.str(0, "TABLE"); this.str(2, "APPID"); this.handle();
+    this.str(100, "AcDbSymbolTable"); this.int(70, 1);
+    this.str(0, "APPID"); this.handle();
+    this.str(100, "AcDbSymbolTableRecord"); this.str(100, "AcDbRegAppTableRecord");
+    this.str(2, "ACAD"); this.int(70, 0);
+    this.str(0, "ENDTAB");
+
+    // DIMSTYLE table (required, empty)
+    this.str(0, "TABLE"); this.str(2, "DIMSTYLE"); this.handle();
+    this.str(100, "AcDbSymbolTable"); this.int(70, 0);
+    this.str(0, "ENDTAB");
+
+    // BLOCK_RECORD table (required by R2000)
+    this.str(0, "TABLE"); this.str(2, "BLOCK_RECORD"); this.handle();
+    this.str(100, "AcDbSymbolTable"); this.int(70, 2);
+    this.str(0, "BLOCK_RECORD"); this.handle();
+    this.str(100, "AcDbSymbolTableRecord"); this.str(100, "AcDbBlockTableRecord");
+    this.str(2, "*Model_Space");
+    this.str(0, "BLOCK_RECORD"); this.handle();
+    this.str(100, "AcDbSymbolTableRecord"); this.str(100, "AcDbBlockTableRecord");
+    this.str(2, "*Paper_Space");
     this.str(0, "ENDTAB");
 
     this.str(0, "ENDSEC");
   }
 
   writeBlocks() {
-    this.str(0, "SECTION"); this.str(2, "BLOCKS"); this.str(0, "ENDSEC");
+    this.str(0, "SECTION");
+    this.str(2, "BLOCKS");
+
+    // *Model_Space block (required)
+    this.str(0, "BLOCK"); this.handle();
+    this.str(100, "AcDbEntity"); this.str(8, "0");
+    this.str(100, "AcDbBlockBegin");
+    this.str(2, "*Model_Space"); this.int(70, 0);
+    this.real(10, 0); this.real(20, 0); this.real(30, 0);
+    this.str(3, "*Model_Space"); this.str(1, "");
+    this.str(0, "ENDBLK"); this.handle();
+    this.str(100, "AcDbEntity"); this.str(8, "0");
+    this.str(100, "AcDbBlockEnd");
+
+    // *Paper_Space block (required)
+    this.str(0, "BLOCK"); this.handle();
+    this.str(100, "AcDbEntity"); this.str(8, "0");
+    this.str(100, "AcDbBlockBegin");
+    this.str(2, "*Paper_Space"); this.int(70, 0);
+    this.real(10, 0); this.real(20, 0); this.real(30, 0);
+    this.str(3, "*Paper_Space"); this.str(1, "");
+    this.str(0, "ENDBLK"); this.handle();
+    this.str(100, "AcDbEntity"); this.str(8, "0");
+    this.str(100, "AcDbBlockEnd");
+
+    this.str(0, "ENDSEC");
   }
 
   startEntities() { this.str(0, "SECTION"); this.str(2, "ENTITIES"); }
   endEntities() { this.str(0, "ENDSEC"); }
 
   addLine(layer: string, x1: number, y1: number, x2: number, y2: number, color?: number) {
-    this.str(0, "LINE"); this.str(8, layer);
+    this.str(0, "LINE"); this.handle();
+    this.str(100, "AcDbEntity"); this.str(8, layer);
     if (color !== undefined) this.int(62, color);
+    this.str(100, "AcDbLine");
     this.real(10, x1); this.real(20, y1); this.real(30, 0);
     this.real(11, x2); this.real(21, y2); this.real(31, 0);
   }
@@ -266,33 +359,49 @@ class DxfWriter {
 
   addPolyline(layer: string, points: { x: number; y: number }[], color?: number) {
     if (points.length < 2) return;
-    this.str(0, "POLYLINE"); this.str(8, layer);
+    this.str(0, "LWPOLYLINE"); this.handle();
+    this.str(100, "AcDbEntity"); this.str(8, layer);
     if (color !== undefined) this.int(62, color);
-    this.int(66, 1); this.int(70, 0);
-    this.real(10, 0); this.real(20, 0); this.real(30, 0);
+    this.str(100, "AcDbPolyline");
+    this.int(90, points.length);
+    this.int(70, 0); // open polyline
     for (const p of points) {
-      this.str(0, "VERTEX"); this.str(8, layer);
-      this.real(10, p.x); this.real(20, p.y); this.real(30, 0);
+      this.real(10, p.x); this.real(20, p.y);
     }
-    this.str(0, "SEQEND"); this.str(8, layer);
   }
 
   addText(layer: string, x: number, y: number, height: number, text: string, color?: number) {
-    this.str(0, "TEXT"); this.str(8, layer);
+    this.str(0, "TEXT"); this.handle();
+    this.str(100, "AcDbEntity"); this.str(8, layer);
     if (color !== undefined) this.int(62, color);
+    this.str(100, "AcDbText");
     this.real(10, x); this.real(20, y); this.real(30, 0);
     this.real(40, height); this.str(1, text); this.str(7, "STANDARD");
+    this.str(100, "AcDbText"); // second subclass marker required by R2000
   }
 
   /** Right-aligned text using second alignment point. */
   addTextRight(layer: string, x: number, y: number, height: number, text: string, color?: number) {
-    this.str(0, "TEXT"); this.str(8, layer);
+    this.str(0, "TEXT"); this.handle();
+    this.str(100, "AcDbEntity"); this.str(8, layer);
     if (color !== undefined) this.int(62, color);
+    this.str(100, "AcDbText");
     this.real(10, x); this.real(20, y); this.real(30, 0);
     this.real(40, height); this.str(1, text); this.str(7, "STANDARD");
     this.int(72, 2); // horizontal right-align
-    this.int(73, 1); // vertical bottom
     this.real(11, x); this.real(21, y); this.real(31, 0);
+    this.str(100, "AcDbText"); // second subclass marker required by R2000
+    this.int(73, 0); // vertical justification goes in second AcDbText block
+  }
+
+  writeObjects() {
+    this.str(0, "SECTION");
+    this.str(2, "OBJECTS");
+    // Minimal root dictionary required by R2000
+    this.str(0, "DICTIONARY"); this.handle();
+    this.str(100, "AcDbDictionary");
+    this.int(281, 1);
+    this.str(0, "ENDSEC");
   }
 
   writeEof() { this.str(0, "EOF"); }
@@ -403,6 +512,7 @@ export function exportDxf(rfInstance: ReactFlowInstance) {
     { x: minX - 20, y: minY - 20 },
     { x: maxX + 20, y: maxY + 20 },
   );
+  dxf.writeClasses();
   dxf.writeTables(layers);
   dxf.writeBlocks();
   dxf.startEntities();
@@ -567,6 +677,7 @@ export function exportDxf(rfInstance: ReactFlowInstance) {
   }
 
   dxf.endEntities();
+  dxf.writeObjects();
   dxf.writeEof();
 
   // Download
