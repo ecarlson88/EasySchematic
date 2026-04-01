@@ -501,9 +501,8 @@ export function exportDxf(rfInstance: ReactFlowInstance) {
   ];
   // Add a connection sub-layer per signal type
   for (const sig of usedSignalTypes) {
-    const label = sig.toUpperCase().replace(/-/g, " ");
     layers.push({
-      name: `EasySchematic-Connections-${label}`,
+      name: `EasySchematic-Connections-${sig.toUpperCase()}`,
       color: SIGNAL_ACI[sig] ?? 5,
     });
   }
@@ -671,7 +670,7 @@ export function exportDxf(rfInstance: ReactFlowInstance) {
 
     const sig = edge.data?.signalType;
     const layerName = sig
-      ? `EasySchematic-Connections-${sig.toUpperCase().replace(/-/g, " ")}`
+      ? `EasySchematic-Connections-${sig.toUpperCase()}`
       : "0";
     dxf.addPolyline(layerName, pts);
   }
