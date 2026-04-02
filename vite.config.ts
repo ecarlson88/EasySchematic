@@ -22,6 +22,7 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       workbox: {
+        maximumFileSizeToCacheInBytes: 3145728,
         globPatterns: ['**/*.{js,css,html,svg,png,ttf,json}'],
         globIgnores: [
           '**/deviceLibrary.fallback.json',
