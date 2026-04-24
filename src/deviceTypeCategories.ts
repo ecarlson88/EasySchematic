@@ -32,6 +32,7 @@ export const DEVICE_TYPE_TO_CATEGORY: Record<string, string> = {
   "audio-dsp": "Audio",
   "equalizer": "Audio",
   "stage-box": "Audio I/O",
+  "audio-splitter": "Audio I/O",
   "wireless-mic-receiver": "Microphones",
   "speaker": "Speakers",
   "amplifier": "Amplifiers",
@@ -81,6 +82,7 @@ export const DEVICE_TYPE_TO_CATEGORY: Record<string, string> = {
   "hdmi-splitter": "Distribution",
   "network-router": "Networking",
   "nas": "Storage",
+  "external-storage": "Storage",
   "lighting-processor": "Lighting",
   "network-wifi": "Networking",
   "access-point": "Networking",
@@ -97,6 +99,7 @@ export const DEVICE_TYPE_TO_CATEGORY: Record<string, string> = {
   "phone-hybrid": "Intercom",
   "table-box": "Cable Accessories",
   "antenna": "Wireless",
+  "antenna-distribution": "Wireless",
 };
 
 /** Human-readable labels for device types (kebab-case → Title Case with known acronyms) */

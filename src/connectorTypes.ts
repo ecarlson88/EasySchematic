@@ -21,6 +21,7 @@ export const DEFAULT_CONNECTOR: Record<SignalType, ConnectorType> = {
   srt: "rj45",
   genlock: "bnc",
   gpio: "phoenix",
+  "contact-closure": "phoenix",
   rs422: "db9",
   serial: "db9",
   thunderbolt: "usb-c",
@@ -103,6 +104,26 @@ export const CONNECTOR_ACCEPTS: Partial<Record<ConnectorType, ConnectorAcceptanc
 
 /** Bare-wire connectors (no physical connector — cable goes straight in) are compatible with anything */
 export const BARE_WIRE_CONNECTORS: Set<ConnectorType> = new Set(["phoenix", "terminal-block"]);
+
+/** Signal pairs that physically share a connector and are interchangeable when both ports use it.
+ *  Thunderbolt ports are USB-C and carry USB; a plain USB-C cable works between them. */
+export const SIGNAL_COMPAT_VIA_CONNECTOR: ReadonlyArray<readonly [SignalType, SignalType, ConnectorType]> = [
+  ["thunderbolt", "usb", "usb-c"],
+];
+
+export function areSignalsCompatibleViaConnector(
+  aSignal: SignalType,
+  aConn: ConnectorType | undefined,
+  bSignal: SignalType,
+  bConn: ConnectorType | undefined,
+): boolean {
+  if (!aConn || !bConn || aConn !== bConn) return false;
+  return SIGNAL_COMPAT_VIA_CONNECTOR.some(
+    ([s1, s2, c]) =>
+      aConn === c &&
+      ((s1 === aSignal && s2 === bSignal) || (s1 === bSignal && s2 === aSignal)),
+  );
+}
 
 /** Check if two connector types are compatible (same type or one accepts the other) */
 export function areConnectorsCompatible(a: ConnectorType | undefined, b: ConnectorType | undefined): boolean {
@@ -189,6 +210,7 @@ export const CONNECTOR_TO_CABLE: Record<ConnectorType, string> = {
   "cam-lok": "Cam-Lok",
   "powercon-true1": "powerCON TRUE1",
   qsfp: "QSFP Fiber",
+  qsfp28: "QSFP28 Fiber",
   mpo: "MPO Fiber",
   wireless: "Wireless",
   "usb-micro": "Micro USB",
@@ -197,6 +219,9 @@ export const CONNECTOR_TO_CABLE: Record<ConnectorType, string> = {
   db37: "DB37",
   digilink: "DigiLink",
   "pcie-6pin": "PCIe 6-pin Aux",
+  "lemo-2pin": "LEMO 2-pin",
+  "lemo-4pin": "LEMO 4-pin",
+  "lemo-5pin": "LEMO 5-pin",
   none: "",
   other: "Other",
 };
@@ -313,6 +338,9 @@ export const CONNECTOR_GENDER: Partial<Record<ConnectorType, Gender | { input: G
   "pcie-6pin": "male",
   "d-tap": "female",
   "v-mount": "female",
+  "lemo-2pin": "female",
+  "lemo-4pin": "female",
+  "lemo-5pin": "female",
 
   // Direction-conditional — gender flips based on signal flow
   "xlr-3":            { input: "female", output: "male" },

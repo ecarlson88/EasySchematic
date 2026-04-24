@@ -52,15 +52,17 @@ const CATEGORIES = {
   "monitor": "Displays", "tv": "Displays",
   "projector": "Projection", "recorder": "Recording",
   "audio-mixer": "Mixing Consoles",
-  "audio-embedder": "Audio I/O", "audio-interface": "Audio I/O", "stage-box": "Audio I/O",
+  "audio-embedder": "Audio I/O", "audio-interface": "Audio I/O", "stage-box": "Audio I/O", "audio-splitter": "Audio I/O",
   "audio-dsp": "Audio", "equalizer": "Audio", "headphone-amplifier": "Audio", "personal-monitor": "Audio",
+  "monitor-controller": "Audio", "assistive-listening": "Audio",
   "wired-mic": "Microphones", "wireless-mic-receiver": "Microphones", "iem-transmitter": "Microphones",
   "speaker": "Speakers", "studio-monitor": "Speakers",
   "amplifier": "Amplifiers",
   "ndi-encoder": "Networking", "ndi-decoder": "Networking", "network-switch": "Networking",
   "streaming-encoder": "Networking", "av-over-ip": "Networking", "network-router": "Networking", "network-wifi": "Networking",
   "kvm-extender": "KVM / Extenders", "hdbaset-extender": "KVM / Extenders",
-  "wireless-video": "Wireless",
+  "wireless-video": "Wireless", "antenna": "Wireless", "antenna-distribution": "Wireless",
+  "access-point": "Networking",
   "intercom": "Intercom", "intercom-transceiver": "Intercom",
   "commentary-box": "Intercom", "phone-hybrid": "Intercom",
   "led-processor": "LED Video", "led-cabinet": "LED Video",
@@ -69,18 +71,22 @@ const CATEGORIES = {
   "dmx-splitter": "Lighting", "dmx-node": "Lighting", "lighting-processor": "Lighting",
   "control-processor": "Control", "tally-system": "Control", "ptz-controller": "Control",
   "sync-generator": "Control", "timecode-generator": "Control", "midi-device": "Control",
-  "control-expansion": "Control", "controller": "Control",
-  "cable-accessory": "Cable Accessories",
+  "control-expansion": "Control", "controller": "Control", "button-panel": "Control",
+  "cable-accessory": "Cable Accessories", "table-box": "Cable Accessories",
   "power-distribution": "Infrastructure", "patch-panel": "Infrastructure", "company-switch": "Infrastructure",
+  "battery": "Infrastructure", "frame": "Infrastructure",
   "expansion-chassis": "Audio Expansion",
-  "expansion-card": "Expansion Cards",
+  "expansion-card": "Expansion Cards", "change-over": "Expansion Cards", "fiber-transmitter": "Expansion Cards",
   "cloud-service": "Cloud Services",
   "power-mixer": "Powered Mixers",
-  "nas": "Storage",
+  "nas": "Storage", "external-storage": "Storage",
   "audio-meter": "Monitoring", "video-scope": "Monitoring",
 };
 
 function esc(s) { return s ? s.replace(/'/g, "''") : ""; }
+const numOrNull = (v) => (v != null ? v : "NULL");
+const strOrNull = (v) => (v ? `'${esc(v)}'` : "NULL");
+const jsonOrNull = (v) => (v ? `'${esc(JSON.stringify(v))}'` : "NULL");
 
 const ids = process.argv.slice(2);
 if (!ids.length) {
@@ -93,9 +99,9 @@ let approved = 0, failed = 0;
 for (const id of ids) {
   console.log(`\n[${ids.indexOf(id)+1}/${ids.length}] ${id}`);
   try {
-    const rows = d1Read(`SELECT * FROM submissions WHERE id = '${esc(id)}' AND status = 'pending'`);
+    const rows = d1Read(`SELECT * FROM submissions WHERE id = '${esc(id)}' AND status IN ('pending', 'deferred')`);
     if (!rows.length) {
-      console.log(`  SKIP - not found or not pending`);
+      console.log(`  SKIP - not found or already reviewed`);
       continue;
     }
     const sub = rows[0];
@@ -103,13 +109,13 @@ for (const id of ids) {
     const category = CATEGORIES[data.deviceType] || data.category || "Other";
 
     if (sub.action === "update" && sub.template_id) {
-      const sql = `UPDATE templates SET device_type = '${esc(data.deviceType)}', category = '${esc(category)}', label = '${esc(data.label)}', manufacturer = ${data.manufacturer ? `'${esc(data.manufacturer)}'` : "NULL"}, model_number = ${data.modelNumber ? `'${esc(data.modelNumber)}'` : "NULL"}, color = ${data.color ? `'${esc(data.color)}'` : "NULL"}, image_url = ${data.imageUrl ? `'${esc(data.imageUrl)}'` : "NULL"}, reference_url = ${data.referenceUrl ? `'${esc(data.referenceUrl)}'` : "NULL"}, search_terms = ${data.searchTerms ? `'${esc(JSON.stringify(data.searchTerms))}'` : "NULL"}, ports = '${esc(JSON.stringify(data.ports))}', slots = ${data.slots ? `'${esc(JSON.stringify(data.slots))}'` : "NULL"}, slot_family = ${data.slotFamily ? `'${esc(data.slotFamily)}'` : "NULL"}, power_draw_w = ${data.powerDrawW != null ? data.powerDrawW : "NULL"}, power_capacity_w = ${data.powerCapacityW != null ? data.powerCapacityW : "NULL"}, voltage = ${data.voltage ? `'${esc(data.voltage)}'` : "NULL"}, poe_budget_w = ${data.poeBudgetW != null ? data.poeBudgetW : "NULL"}, is_venue_provided = ${data.isVenueProvided ? 1 : "NULL"}, version = version + 1, updated_at = CURRENT_TIMESTAMP, last_edited_by = '${esc(sub.user_id)}' WHERE id = '${esc(sub.template_id)}';`;
+      const sql = `UPDATE templates SET device_type = '${esc(data.deviceType)}', category = '${esc(category)}', label = '${esc(data.label)}', manufacturer = ${strOrNull(data.manufacturer)}, model_number = ${strOrNull(data.modelNumber)}, color = ${strOrNull(data.color)}, image_url = ${strOrNull(data.imageUrl)}, reference_url = ${strOrNull(data.referenceUrl)}, search_terms = ${jsonOrNull(data.searchTerms)}, ports = '${esc(JSON.stringify(data.ports))}', slots = ${jsonOrNull(data.slots)}, slot_family = ${strOrNull(data.slotFamily)}, power_draw_w = ${numOrNull(data.powerDrawW)}, power_capacity_w = ${numOrNull(data.powerCapacityW)}, voltage = ${strOrNull(data.voltage)}, poe_budget_w = ${numOrNull(data.poeBudgetW)}, poe_draw_w = ${numOrNull(data.poeDrawW)}, height_mm = ${numOrNull(data.heightMm)}, width_mm = ${numOrNull(data.widthMm)}, depth_mm = ${numOrNull(data.depthMm)}, weight_kg = ${numOrNull(data.weightKg)}, is_venue_provided = ${data.isVenueProvided ? 1 : "NULL"}, version = version + 1, updated_at = CURRENT_TIMESTAMP, last_edited_by = '${esc(sub.user_id)}' WHERE id = '${esc(sub.template_id)}';`;
       d1Write(sql);
       console.log(`  UPDATE ${data.label}`);
 
     } else if (sub.action === "create") {
       const templateId = crypto.randomUUID();
-      const sql = `INSERT INTO templates (id, version, device_type, category, label, manufacturer, model_number, color, image_url, reference_url, search_terms, ports, slots, slot_family, power_draw_w, power_capacity_w, voltage, poe_budget_w, is_venue_provided, sort_order, submitted_by) VALUES ('${templateId}', 1, '${esc(data.deviceType)}', '${esc(category)}', '${esc(data.label)}', ${data.manufacturer ? `'${esc(data.manufacturer)}'` : "NULL"}, ${data.modelNumber ? `'${esc(data.modelNumber)}'` : "NULL"}, ${data.color ? `'${esc(data.color)}'` : "NULL"}, ${data.imageUrl ? `'${esc(data.imageUrl)}'` : "NULL"}, ${data.referenceUrl ? `'${esc(data.referenceUrl)}'` : "NULL"}, ${data.searchTerms ? `'${esc(JSON.stringify(data.searchTerms))}'` : "NULL"}, '${esc(JSON.stringify(data.ports))}', ${data.slots ? `'${esc(JSON.stringify(data.slots))}'` : "NULL"}, ${data.slotFamily ? `'${esc(data.slotFamily)}'` : "NULL"}, ${data.powerDrawW != null ? data.powerDrawW : "NULL"}, ${data.powerCapacityW != null ? data.powerCapacityW : "NULL"}, ${data.voltage ? `'${esc(data.voltage)}'` : "NULL"}, ${data.poeBudgetW != null ? data.poeBudgetW : "NULL"}, ${data.isVenueProvided ? 1 : "NULL"}, 0, '${esc(sub.user_id)}');`;
+      const sql = `INSERT INTO templates (id, version, device_type, category, label, manufacturer, model_number, color, image_url, reference_url, search_terms, ports, slots, slot_family, power_draw_w, power_capacity_w, voltage, poe_budget_w, poe_draw_w, height_mm, width_mm, depth_mm, weight_kg, is_venue_provided, sort_order, submitted_by) VALUES ('${templateId}', 1, '${esc(data.deviceType)}', '${esc(category)}', '${esc(data.label)}', ${strOrNull(data.manufacturer)}, ${strOrNull(data.modelNumber)}, ${strOrNull(data.color)}, ${strOrNull(data.imageUrl)}, ${strOrNull(data.referenceUrl)}, ${jsonOrNull(data.searchTerms)}, '${esc(JSON.stringify(data.ports))}', ${jsonOrNull(data.slots)}, ${strOrNull(data.slotFamily)}, ${numOrNull(data.powerDrawW)}, ${numOrNull(data.powerCapacityW)}, ${strOrNull(data.voltage)}, ${numOrNull(data.poeBudgetW)}, ${numOrNull(data.poeDrawW)}, ${numOrNull(data.heightMm)}, ${numOrNull(data.widthMm)}, ${numOrNull(data.depthMm)}, ${numOrNull(data.weightKg)}, ${data.isVenueProvided ? 1 : "NULL"}, 0, '${esc(sub.user_id)}');`;
       d1Write(sql);
       console.log(`  CREATE ${data.label}`);
     }

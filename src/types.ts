@@ -9,12 +9,13 @@ export type ConnectorType =
   | "speakon" | "socapex" | "multipin" | "rca" | "toslink" | "barrel"
   | "banana" | "binding-post" | "binding-post-banana" | "dvi" | "mini-xlr" | "opticalcon"
   | "l5-20" | "l6-20" | "l6-30" | "l21-30" | "cam-lok" | "powercon-true1"
-  | "qsfp" | "mpo" | "digilink" | "pcie-6pin"
+  | "qsfp" | "qsfp28" | "mpo" | "digilink" | "pcie-6pin"
   | "mini-din-4" | "mini-din-7"
   | "mini-hdmi" | "mini-displayport"
   | "rj11" | "rj12" | "usb-mini" | "usb-micro" | "trs-2.5mm"
   | "reverse-tnc" | "sma" | "db37"
   | "d-tap" | "v-mount" | "f-connector"
+  | "lemo-2pin" | "lemo-4pin" | "lemo-5pin"
   | "wireless"
   | "none" | "other";
 
@@ -68,6 +69,7 @@ export type SignalType =
   | "srt"
   | "genlock"
   | "gpio"
+  | "contact-closure"
   | "rs422"
   | "serial"
   | "thunderbolt"
@@ -587,6 +589,7 @@ export const SIGNAL_COLORS: Record<SignalType, string> = {
   srt: "var(--color-srt)",
   genlock: "var(--color-genlock)",
   gpio: "var(--color-gpio)",
+  "contact-closure": "var(--color-contact-closure)",
   rs422: "var(--color-rs422)",
   serial: "var(--color-serial)",
   thunderbolt: "var(--color-thunderbolt)",
@@ -691,9 +694,13 @@ export const CONNECTOR_LABELS: Record<ConnectorType, string> = {
   rj11: "RJ11",
   rj12: "RJ12",
   qsfp: "QSFP+",
+  qsfp28: "QSFP28",
   mpo: "Fiber - MPO/MTP",
   digilink: "DigiLink",
   "pcie-6pin": "PCIe 6-pin Aux",
+  "lemo-2pin": "LEMO 2-pin",
+  "lemo-4pin": "LEMO 4-pin",
+  "lemo-5pin": "LEMO 5-pin",
   "usb-mini": "Mini USB",
   "usb-micro": "Micro USB",
   "trs-2.5mm": "2.5mm TRS",
@@ -735,6 +742,7 @@ export const SIGNAL_LABELS: Record<SignalType, string> = {
   srt: "SRT",
   genlock: "Genlock",
   gpio: "GPIO",
+  "contact-closure": "Contact Closure",
   rs422: "RS-422",
   serial: "Serial",
   thunderbolt: "Thunderbolt",
@@ -787,7 +795,7 @@ export const SIGNAL_GROUPS: Record<string, SignalType[]> = {
   "Video over IP": ["ndi", "srt", "hdbaset", "st2110"],
   "Audio": ["analog-audio", "speaker-level", "bluetooth", "aes", "dante", "avb", "aes67", "madi", "spdif", "adat", "ultranet", "aes50", "stageconnect", "ydif", "soundgrid", "gigaace", "dx5", "dsnake", "slink", "fibreace", "digilink"],
   "Network": ["ethernet", "fiber"],
-  "Control / Data": ["dmx", "artnet", "sacn", "rs422", "serial", "gpio", "ir", "midi", "tally", "usb", "thunderbolt", "dxlink"],
+  "Control / Data": ["dmx", "artnet", "sacn", "rs422", "serial", "gpio", "contact-closure", "ir", "midi", "tally", "usb", "thunderbolt", "dxlink"],
   "Sync / Clock": ["genlock", "wordclock", "timecode", "dars", "gps"],
   "Power": ["power", "power-l1", "power-l2", "power-l3", "power-neutral", "power-ground"],
   "Streaming": ["rtmp", "rtsp", "mpeg-ts", "rf"],
@@ -798,10 +806,10 @@ export const SIGNAL_GROUPS: Record<string, SignalType[]> = {
 export const CONNECTOR_GROUPS: Record<string, ConnectorType[]> = {
   "Video": ["bnc", "hdmi", "mini-hdmi", "displayport", "mini-displayport", "dvi", "vga"],
   "Audio": ["xlr-3", "xlr-4", "xlr-5", "mini-xlr", "combo-xlr-trs", "trs-quarter", "trs-eighth", "trs-2.5mm", "rca", "din-5", "mini-din-4", "mini-din-7", "toslink"],
-  "Network / Data": ["rj45", "ethercon", "sfp", "lc", "sc", "opticalcon", "qsfp", "mpo", "rj11", "rj12"],
+  "Network / Data": ["rj45", "ethercon", "sfp", "lc", "sc", "opticalcon", "qsfp", "qsfp28", "mpo", "rj11", "rj12"],
   "USB": ["usb-a", "usb-b", "usb-c", "usb-mini", "usb-micro"],
-  "D-Sub / Serial": ["db9", "db15", "db25", "db37", "db7w2"],
-  "Power": ["iec", "iec-c5", "iec-c7", "iec-c15", "iec-c20", "powercon", "powercon-true1", "edison", "barrel", "l5-20", "l6-20", "l6-30", "l21-30", "cam-lok", "socapex", "pcie-6pin"],
+  "D-Sub / Serial": ["db9", "db15", "db25", "db37", "db7w2", "lemo-5pin"],
+  "Power": ["iec", "iec-c5", "iec-c7", "iec-c15", "iec-c20", "powercon", "powercon-true1", "edison", "barrel", "l5-20", "l6-20", "l6-30", "l21-30", "cam-lok", "socapex", "pcie-6pin", "lemo-2pin", "lemo-4pin"],
   "Speaker": ["speakon", "banana", "binding-post", "binding-post-banana"],
   "Terminal": ["phoenix", "terminal-block", "multipin"],
   "RF": ["reverse-tnc", "sma"],
