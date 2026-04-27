@@ -538,7 +538,7 @@ export interface DistanceSettings {
 }
 
 export const DEFAULT_DISTANCE_SETTINGS: DistanceSettings = {
-  unit: "m",
+  unit: "ft",
   slackPercent: 15,
   slackFixed: 0,
 };
