@@ -4,7 +4,7 @@ import type {
   SignalType,
   DistanceSettings,
 } from "./types";
-import { SIGNAL_LABELS, CONNECTOR_LABELS } from "./types";
+import { SIGNAL_LABELS, CONNECTOR_LABELS, DEFAULT_DISTANCE_SETTINGS } from "./types";
 import { getCableType } from "./cableTypes";
 import { resolvePort, resolvePortLabel, getRoomLabel, escapeCsv, csvRow, groupBy } from "./packList";
 import { transformLabelNow } from "./labelCaseUtils";
@@ -217,10 +217,11 @@ function computeRowEstimatedLength(
   nodes: SchematicNode[],
   ctx: CableScheduleDistanceContext | undefined,
 ): string | undefined {
-  if (!ctx?.roomDistances || !ctx.distanceSettings) return undefined;
+  if (!ctx?.roomDistances) return undefined;
   const dist = getRoomDistance(sourceParentId, targetParentId, { roomDistances: ctx.roomDistances }, nodes);
   if (dist === undefined) return undefined;
-  return formatLength(computeCableLength(dist, ctx.distanceSettings), ctx.distanceSettings.unit);
+  const settings = ctx.distanceSettings ?? DEFAULT_DISTANCE_SETTINGS;
+  return formatLength(computeCableLength(dist, settings), settings.unit);
 }
 
 export function exportCableScheduleCsv(
