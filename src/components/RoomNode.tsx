@@ -1,8 +1,10 @@
 import { memo, useState, useCallback } from "react";
 import { NodeResizer, type NodeProps } from "@xyflow/react";
-import type { RoomNode as RoomNodeType, SchematicNode } from "../types";
+import type { DeviceData, RoomNode as RoomNodeType, SchematicNode } from "../types";
 import { useSchematicStore } from "../store";
 import { computeResizeSnap } from "../snapUtils";
+
+const MM_PER_U = 44.45;
 
 function RackIcon() {
   return (
@@ -41,6 +43,18 @@ function RoomNodeComponent({ id, data, selected }: NodeProps<RoomNodeType>) {
   const setResizeGuides = useSchematicStore((s) => s.setResizeGuides);
   const onRoomResizeEnd = useSchematicStore((s) => s.onRoomResizeEnd);
   const isSubroom = useSchematicStore((s) => !!s.nodes.find((n) => n.id === id)?.parentId);
+  const occupiedU = useSchematicStore(
+    useCallback(
+      (s) =>
+        s.nodes
+          .filter((n) => n.parentId === id && n.type === "device")
+          .reduce((sum, n) => {
+            const h = (n.data as DeviceData).heightMm;
+            return sum + (h ? Math.ceil(h / MM_PER_U) : 1);
+          }, 0),
+      [id],
+    ),
+  );
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(data.label);
 
@@ -148,6 +162,21 @@ function RoomNodeComponent({ id, data, selected }: NodeProps<RoomNodeType>) {
             >
               {isRack && <RackIcon />}
               {data.label}
+              {isRack && (
+                <span
+                  className="font-normal normal-case tracking-normal opacity-90"
+                  style={{
+                    color:
+                      data.rackCapacity && occupiedU > data.rackCapacity
+                        ? "#dc2626"
+                        : data.rackCapacity && occupiedU >= data.rackCapacity
+                        ? "#d97706"
+                        : "#6b7280",
+                  }}
+                >
+                  ({data.rackCapacity ? `${occupiedU}/${data.rackCapacity}U` : `${occupiedU}U`})
+                </span>
+              )}
             </span>
           )}
         </div>

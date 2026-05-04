@@ -266,6 +266,8 @@ export interface RoomData {
   labelSize?: number;
   locked?: boolean;
   isEquipmentRack?: boolean;
+  /** Total rack unit capacity of this equipment rack room (e.g. 42) */
+  rackCapacity?: number;
 }
 
 export type RoomNode = Node<RoomData, "room">;

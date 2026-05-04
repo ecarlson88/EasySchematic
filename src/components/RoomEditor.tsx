@@ -36,6 +36,7 @@ export default function RoomEditor() {
   const [labelSize, setLabelSize] = useState(12);
   const [locked, setLocked] = useState(false);
   const [isEquipmentRack, setIsEquipmentRack] = useState(false);
+  const [rackCapacity, setRackCapacity] = useState<number | "">("");
 
   /* eslint-disable react-hooks/set-state-in-effect -- syncing props to local editor state */
   useEffect(() => {
@@ -47,6 +48,7 @@ export default function RoomEditor() {
     setLabelSize(node.data.labelSize ?? 12);
     setLocked(node.data.locked ?? false);
     setIsEquipmentRack(node.data.isEquipmentRack ?? false);
+    setRackCapacity(node.data.rackCapacity ?? "");
   }, [node]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
@@ -61,10 +63,11 @@ export default function RoomEditor() {
       ...(borderStyle && borderStyle !== "dashed" ? { borderStyle } : {}),
       ...(labelSize !== 12 ? { labelSize } : {}),
       ...(isEquipmentRack ? { isEquipmentRack: true } : {}),
+      ...(isEquipmentRack && rackCapacity !== "" ? { rackCapacity: Number(rackCapacity) } : {}),
     };
     updateRoom(editingNodeId, data);
     close();
-  }, [editingNodeId, label, color, borderColor, borderStyle, labelSize, isEquipmentRack, updateRoom, close]);
+  }, [editingNodeId, label, color, borderColor, borderStyle, labelSize, isEquipmentRack, rackCapacity, updateRoom, close]);
 
   if (!editingNodeId || !node) return null;
 
@@ -139,6 +142,25 @@ export default function RoomEditor() {
               >
                 {isEquipmentRack ? "Yes" : "No"}
               </button>
+            </div>
+          )}
+
+          {/* Rack Capacity — only when marked as equipment rack */}
+          {node.parentId && isEquipmentRack && (
+            <div>
+              <label className="block text-[10px] uppercase tracking-wider text-[var(--color-text-muted)] mb-1">
+                Rack Capacity (U)
+              </label>
+              <input
+                type="number"
+                min={1}
+                step={1}
+                value={rackCapacity}
+                placeholder="e.g. 42"
+                onChange={(e) => setRackCapacity(e.target.value === "" ? "" : Number(e.target.value))}
+                className="w-24 bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-2 py-1.5 text-xs text-[var(--color-text-heading)] outline-none focus:border-blue-500"
+                onKeyDown={(e) => e.stopPropagation()}
+              />
             </div>
           )}
 
