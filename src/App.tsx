@@ -37,6 +37,7 @@ import PendingSubmissionBanner from "./components/PendingSubmissionBanner";
 import PortContextMenu from "./components/PortContextMenu";
 import RoutingDebugOverlay from "./components/RoutingDebugOverlay";
 import RoutingTuningPanel from "./components/RoutingTuningPanel";
+import SelectionFilterBar from "./components/SelectionFilterBar";
 import RoomContextMenu from "./components/RoomContextMenu";
 import DeviceContextMenu from "./components/DeviceContextMenu";
 import StubLabelContextMenu from "./components/StubLabelContextMenu";
@@ -84,6 +85,19 @@ function CanvasOriginOverlay() {
       </svg>
     </div>
   );
+}
+
+/** Returns true if a polyline segment (a→b) intersects an axis-aligned rect. */
+function segmentIntersectsRect(
+  a: { x: number; y: number },
+  b: { x: number; y: number },
+  minX: number, minY: number, maxX: number, maxY: number,
+): boolean {
+  const x1 = Math.min(a.x, b.x), x2 = Math.max(a.x, b.x);
+  const y1 = Math.min(a.y, b.y), y2 = Math.max(a.y, b.y);
+  if (Math.abs(y1 - y2) < 1) return a.y >= minY && a.y <= maxY && x2 >= minX && x1 <= maxX;
+  if (Math.abs(x1 - x2) < 1) return a.x >= minX && a.x <= maxX && y2 >= minY && y1 <= maxY;
+  return x2 >= minX && x1 <= maxX && y2 >= minY && y1 <= maxY;
 }
 
 /** Combines drag snap guides (local state) with resize snap guides (store state). */
@@ -292,16 +306,54 @@ function SchematicCanvas() {
 
   useEffect(() => {
     let currentDir: 'window' | 'crossing' | null = null;
+    let lastRect: { x: number; y: number; width: number; height: number } | null = null;
+    let lastTransform: [number, number, number] | null = null;
+
     const unsubscribe = rfStore.subscribe((state) => {
       const rect = state.userSelectionRect;
       if (!rect) {
+        // Rect just cleared — if it was a crossing drag, also select edges whose
+        // routed paths cross the selection box (not just those with enclosed endpoints).
+        if (currentDir === 'crossing' && lastRect && lastTransform) {
+          const capturedRect = lastRect;
+          const capturedTransform = lastTransform;
+          setTimeout(() => {
+            const [tx, ty, zoom] = capturedTransform;
+            const minX = (capturedRect.x - tx) / zoom;
+            const minY = (capturedRect.y - ty) / zoom;
+            const maxX = (capturedRect.x + capturedRect.width - tx) / zoom;
+            const maxY = (capturedRect.y + capturedRect.height - ty) / zoom;
+            const schStore = useSchematicStore.getState();
+            const toSelect = new Set<string>();
+            for (const [edgeId, route] of Object.entries(schStore.routedEdges)) {
+              const wps = route.waypoints;
+              for (let i = 0; i < wps.length - 1; i++) {
+                if (segmentIntersectsRect(wps[i], wps[i + 1], minX, minY, maxX, maxY)) {
+                  toSelect.add(edgeId);
+                  break;
+                }
+              }
+            }
+            if (toSelect.size > 0) {
+              useSchematicStore.setState({
+                edges: schStore.edges.map((e) =>
+                  toSelect.has(e.id) ? { ...e, selected: true } : e,
+                ),
+              });
+            }
+          }, 0);
+        }
         if (currentDir !== null) {
           currentDir = null;
           setSelectionDirection(null);
         }
+        lastRect = null;
+        lastTransform = null;
         return;
       }
       if (rect.width === 0 && rect.height === 0) return;
+      lastRect = { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+      lastTransform = [...state.transform] as [number, number, number];
       const nextDir = rect.x < rect.startX ? 'crossing' : 'window';
       if (nextDir !== currentDir) {
         currentDir = nextDir;
@@ -1123,6 +1175,20 @@ function SchematicCanvas() {
   const onNodeDrag = useCallback(
     (_event: React.MouseEvent, draggedNode: Node) => {
       const state = useSchematicStore.getState();
+
+      // Waypoint nodes are simple: snap to grid, no overlap or reparent logic.
+      if (draggedNode.type === "waypoint") {
+        const sx = Math.round(draggedNode.position.x / GRID_SIZE) * GRID_SIZE;
+        const sy = Math.round(draggedNode.position.y / GRID_SIZE) * GRID_SIZE;
+        if (sx !== draggedNode.position.x || sy !== draggedNode.position.y) {
+          const updated = state.nodes.map((n) =>
+            n.id === draggedNode.id ? { ...n, position: { x: sx, y: sy } } : n,
+          );
+          useSchematicStore.setState({ nodes: updated as SchematicNode[] });
+        }
+        return;
+      }
+
       const snap = computeSnap(draggedNode as SchematicNode, state.nodes);
       setSnapGuides(snap.guides);
 
@@ -1164,8 +1230,31 @@ function SchematicCanvas() {
     (_event: React.MouseEvent, draggedNode: Node) => {
       setSnapGuides([]);
 
-      // Apply final snap so the node lands on the aligned position
       const state = useSchematicStore.getState();
+
+      // Waypoints don't participate in spacing/overlap/reparent logic. Just
+      // grid-snap the final position and bail out so the manualWaypoints sync
+      // (in store.onNodesChange) sees the resting position.
+      if (draggedNode.type === "waypoint") {
+        const sx = Math.round(draggedNode.position.x / GRID_SIZE) * GRID_SIZE;
+        const sy = Math.round(draggedNode.position.y / GRID_SIZE) * GRID_SIZE;
+        if (sx !== draggedNode.position.x || sy !== draggedNode.position.y) {
+          const updated = state.nodes.map((n) =>
+            n.id === draggedNode.id ? { ...n, position: { x: sx, y: sy } } : n,
+          );
+          useSchematicStore.setState({
+            nodes: updated as SchematicNode[],
+            isDragging: false,
+            overlapNodeId: null,
+          });
+        } else {
+          useSchematicStore.setState({ isDragging: false, overlapNodeId: null });
+        }
+        flushPendingSnapshot();
+        return;
+      }
+
+      // Apply final snap so the node lands on the aligned position
       const snap = computeSnap(draggedNode as SchematicNode, state.nodes);
       let finalX = snap.x;
       let finalY = snap.y;
@@ -1461,6 +1550,7 @@ function SchematicCanvas() {
       <RoutingDebugOverlay />
     </ReactFlow>
     <RoutingTuningPanel />
+    <SelectionFilterBar />
     {quickAddPos && (
       <QuickAddDevice
         position={quickAddPos}
