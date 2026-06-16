@@ -19,6 +19,10 @@ export default function PageTabs() {
   const renamePrintSheetPage = useSchematicStore((s) => s.renamePrintSheetPage);
   const duplicateRackPage = useSchematicStore((s) => s.duplicateRackPage);
   const duplicatePrintSheetPage = useSchematicStore((s) => s.duplicatePrintSheetPage);
+  const addFloorplanPage = useSchematicStore((s) => s.addFloorplanPage);
+  const removeFloorplanPage = useSchematicStore((s) => s.removeFloorplanPage);
+  const renameFloorplanPage = useSchematicStore((s) => s.renameFloorplanPage);
+  const duplicateFloorplanPage = useSchematicStore((s) => s.duplicateFloorplanPage);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
@@ -54,9 +58,10 @@ export default function PageTabs() {
     const page = pages.find((p) => p.id === editingId);
     if (!page) { setEditingId(null); return; }
     if (page.type === "print-sheet") renamePrintSheetPage(editingId, editValue.trim());
+    else if (page.type === "floorplan") renameFloorplanPage(editingId, editValue.trim());
     else renameRackPage(editingId, editValue.trim());
     setEditingId(null);
-  }, [editingId, editValue, pages, renameRackPage, renamePrintSheetPage]);
+  }, [editingId, editValue, pages, renameRackPage, renamePrintSheetPage, renameFloorplanPage]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent, pageId: string) => {
     e.preventDefault();
@@ -76,6 +81,7 @@ export default function PageTabs() {
     if (!menuPage) return;
     setContextMenu(null);
     if (menuPage.type === "print-sheet") duplicatePrintSheetPage(menuPage.id);
+    else if (menuPage.type === "floorplan") duplicateFloorplanPage(menuPage.id);
     else duplicateRackPage(menuPage.id);
   };
 
@@ -84,6 +90,8 @@ export default function PageTabs() {
     setContextMenu(null);
     if (menuPage.type === "print-sheet") {
       if (confirm(`Delete print sheet "${menuPage.label}"?`)) removePrintSheetPage(menuPage.id);
+    } else if (menuPage.type === "floorplan") {
+      if (confirm(`Delete floorplan "${menuPage.label}"? This removes its images.`)) removeFloorplanPage(menuPage.id);
     } else {
       if (confirm(`Delete rack page "${menuPage.label}"? This will remove all racks and placements on this page.`)) {
         removeRackPage(menuPage.id);
@@ -91,16 +99,14 @@ export default function PageTabs() {
     }
   };
 
-  const tabClass = (isActive: boolean, isPrint = false) =>
-    `px-3 py-1 rounded-t border border-b-0 whitespace-nowrap transition-colors ${
-      isActive
-        ? isPrint
-          ? "bg-white border-violet-400 font-semibold text-violet-900"
-          : "bg-white border-neutral-300 font-semibold text-neutral-900"
-        : isPrint
-          ? "bg-violet-50 border-transparent text-violet-600 hover:bg-violet-100"
-          : "bg-neutral-200 border-transparent text-neutral-600 hover:bg-neutral-50"
-    }`;
+  const tabClass = (isActive: boolean, kind: "rack" | "print" | "floorplan" = "rack") => {
+    const palette = {
+      print: { active: "bg-white border-violet-400 font-semibold text-violet-900", idle: "bg-violet-50 border-transparent text-violet-600 hover:bg-violet-100" },
+      floorplan: { active: "bg-white border-teal-400 font-semibold text-teal-900", idle: "bg-teal-50 border-transparent text-teal-600 hover:bg-teal-100" },
+      rack: { active: "bg-white border-neutral-300 font-semibold text-neutral-900", idle: "bg-neutral-200 border-transparent text-neutral-600 hover:bg-neutral-50" },
+    }[kind];
+    return `px-3 py-1 rounded-t border border-b-0 whitespace-nowrap transition-colors ${isActive ? palette.active : palette.idle}`;
+  };
 
   return (
     <>
@@ -117,10 +123,12 @@ export default function PageTabs() {
         {/* Page tabs */}
         {pages.map((page) => {
           const isPrint = page.type === "print-sheet";
+          const isFloorplan = page.type === "floorplan";
+          const kind = isPrint ? "print" : isFloorplan ? "floorplan" : "rack";
           return (
             <button
               key={page.id}
-              className={tabClass(activePage === page.id, isPrint)}
+              className={tabClass(activePage === page.id, kind)}
               onClick={() => setActivePage(page.id)}
               onDoubleClick={() => startRename(page.id, page.label)}
               onContextMenu={(e) => handleContextMenu(e, page.id)}
@@ -141,7 +149,7 @@ export default function PageTabs() {
                   onClick={(e) => e.stopPropagation()}
                 />
               ) : (
-                <>{isPrint ? "📄 " : ""}{page.label}</>
+                <>{isPrint ? "📄 " : isFloorplan ? "📐 " : ""}{page.label}</>
               )}
             </button>
           );
@@ -163,6 +171,15 @@ export default function PageTabs() {
           title="Add print sheet"
         >
           📄+
+        </button>
+
+        {/* Add floorplan page */}
+        <button
+          className="px-2 py-1 text-teal-500 hover:text-teal-700 hover:bg-teal-100 rounded"
+          onClick={() => addFloorplanPage()}
+          title="Add floorplan page"
+        >
+          📐+
         </button>
       </div>
 
