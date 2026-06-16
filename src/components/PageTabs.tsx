@@ -22,6 +22,10 @@ export default function PageTabs() {
   const addPatchPanelPage = useSchematicStore((s) => s.addPatchPanelPage);
   const removePatchPanelPage = useSchematicStore((s) => s.removePatchPanelPage);
   const renamePatchPanelPage = useSchematicStore((s) => s.renamePatchPanelPage);
+  const addFloorplanPage = useSchematicStore((s) => s.addFloorplanPage);
+  const removeFloorplanPage = useSchematicStore((s) => s.removeFloorplanPage);
+  const renameFloorplanPage = useSchematicStore((s) => s.renameFloorplanPage);
+  const duplicateFloorplanPage = useSchematicStore((s) => s.duplicateFloorplanPage);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
@@ -58,9 +62,10 @@ export default function PageTabs() {
     if (!page) { setEditingId(null); return; }
     if (page.type === "print-sheet") renamePrintSheetPage(editingId, editValue.trim());
     else if (page.type === "patch-panel") renamePatchPanelPage(editingId, editValue.trim());
+    else if (page.type === "floorplan") renameFloorplanPage(editingId, editValue.trim());
     else renameRackPage(editingId, editValue.trim());
     setEditingId(null);
-  }, [editingId, editValue, pages, renameRackPage, renamePrintSheetPage, renamePatchPanelPage]);
+  }, [editingId, editValue, pages, renameRackPage, renamePrintSheetPage, renamePatchPanelPage, renameFloorplanPage]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent, pageId: string) => {
     e.preventDefault();
@@ -81,6 +86,7 @@ export default function PageTabs() {
     if (!menuPage || menuPage.type === "patch-panel") return;
     setContextMenu(null);
     if (menuPage.type === "print-sheet") duplicatePrintSheetPage(menuPage.id);
+    else if (menuPage.type === "floorplan") duplicateFloorplanPage(menuPage.id);
     else duplicateRackPage(menuPage.id);
   };
 
@@ -93,6 +99,8 @@ export default function PageTabs() {
       if (confirm(`Delete patch bay page "${menuPage.label}"? Panels and patch assignments are kept — only the tab is removed.`)) {
         removePatchPanelPage(menuPage.id);
       }
+    } else if (menuPage.type === "floorplan") {
+      if (confirm(`Delete floorplan "${menuPage.label}"? This removes its images.`)) removeFloorplanPage(menuPage.id);
     } else {
       if (confirm(`Delete rack page "${menuPage.label}"? This will remove all racks and placements on this page.`)) {
         removeRackPage(menuPage.id);
@@ -100,21 +108,16 @@ export default function PageTabs() {
     }
   };
 
-  type TabVariant = "rack" | "print" | "patch";
-  const tabClass = (isActive: boolean, variant: TabVariant = "rack") =>
-    `px-3 py-1 rounded-t border border-b-0 whitespace-nowrap transition-colors ${
-      isActive
-        ? variant === "print"
-          ? "bg-white border-violet-400 font-semibold text-violet-900"
-          : variant === "patch"
-            ? "bg-white border-sky-400 font-semibold text-sky-900"
-            : "bg-white border-neutral-300 font-semibold text-neutral-900"
-        : variant === "print"
-          ? "bg-violet-50 border-transparent text-violet-600 hover:bg-violet-100"
-          : variant === "patch"
-            ? "bg-sky-50 border-transparent text-sky-600 hover:bg-sky-100"
-            : "bg-neutral-200 border-transparent text-neutral-600 hover:bg-neutral-50"
-    }`;
+  type TabVariant = "rack" | "print" | "patch" | "floorplan";
+  const tabClass = (isActive: boolean, variant: TabVariant = "rack") => {
+    const palette = {
+      print: { active: "bg-white border-violet-400 font-semibold text-violet-900", idle: "bg-violet-50 border-transparent text-violet-600 hover:bg-violet-100" },
+      patch: { active: "bg-white border-sky-400 font-semibold text-sky-900", idle: "bg-sky-50 border-transparent text-sky-600 hover:bg-sky-100" },
+      floorplan: { active: "bg-white border-teal-400 font-semibold text-teal-900", idle: "bg-teal-50 border-transparent text-teal-600 hover:bg-teal-100" },
+      rack: { active: "bg-white border-neutral-300 font-semibold text-neutral-900", idle: "bg-neutral-200 border-transparent text-neutral-600 hover:bg-neutral-50" },
+    }[variant];
+    return `px-3 py-1 rounded-t border border-b-0 whitespace-nowrap transition-colors ${isActive ? palette.active : palette.idle}`;
+  };
 
   return (
     <>
@@ -131,8 +134,10 @@ export default function PageTabs() {
         {/* Page tabs */}
         {pages.map((page) => {
           const variant: TabVariant =
-            page.type === "print-sheet" ? "print" : page.type === "patch-panel" ? "patch" : "rack";
-          const isPrint = page.type === "print-sheet";
+            page.type === "print-sheet" ? "print"
+              : page.type === "patch-panel" ? "patch"
+                : page.type === "floorplan" ? "floorplan"
+                  : "rack";
           return (
             <button
               key={page.id}
@@ -157,7 +162,7 @@ export default function PageTabs() {
                   onClick={(e) => e.stopPropagation()}
                 />
               ) : (
-                <>{isPrint ? "📄 " : page.type === "patch-panel" ? "🔌 " : ""}{page.label}</>
+                <>{variant === "print" ? "📄 " : variant === "patch" ? "🔌 " : variant === "floorplan" ? "📐 " : ""}{page.label}</>
               )}
             </button>
           );
@@ -191,6 +196,15 @@ export default function PageTabs() {
             🔌+
           </button>
         )}
+
+        {/* Add floorplan page */}
+        <button
+          className="px-2 py-1 text-teal-500 hover:text-teal-700 hover:bg-teal-100 rounded"
+          onClick={() => addFloorplanPage()}
+          title="Add floorplan page"
+        >
+          📐+
+        </button>
       </div>
 
       {/* Context menu */}

@@ -383,6 +383,27 @@ export interface AnnotationData {
 
 export type AnnotationNode = Node<AnnotationData, "annotation">;
 
+export interface ImageNodeData {
+  [key: string]: unknown;
+  /** Image source as a data URL */
+  src: string;
+  /** Natural pixel dimensions of the imported image (for aspect-ratio locking) */
+  naturalWidth: number;
+  naturalHeight: number;
+  /** Display opacity, 0-100 (default 100) */
+  opacity?: number;
+  /** Calibration: image pixels per real-world unit (from the scale tool) */
+  pxPerUnit?: number;
+  /** Unit label paired with pxPerUnit, e.g. "ft", "m" */
+  unitLabel?: string;
+  /** Pin the image to its coordinate (no drag/resize), mirrors RoomData.locked */
+  locked?: boolean;
+  /** Constrain resizing to the natural aspect ratio (default true) */
+  lockAspect?: boolean;
+}
+
+export type ImageNode = Node<ImageNodeData, "image">;
+
 export interface StubLabelData {
   [key: string]: unknown;
   /** Signal type — controls border color, matches the linked connection */
@@ -465,7 +486,7 @@ export interface BundleJunctionData {
 
 export type BundleJunctionNode = Node<BundleJunctionData, "bundle-junction">;
 
-export type SchematicNode = DeviceNode | RoomNode | NoteNode | AnnotationNode | StubLabelNode | TextStubNode | WaypointNode | BundleJunctionNode;
+export type SchematicNode = DeviceNode | RoomNode | NoteNode | AnnotationNode | ImageNode | StubLabelNode | TextStubNode | WaypointNode | BundleJunctionNode;
 
 /** One intermediate patch-panel hop on a connection's physical path (source → target order).
  *  The panel is a real device node (deviceType "patch-panel"), possibly off-canvas. */
@@ -803,7 +824,18 @@ export interface PatchPanelViewPage {
   type: "patch-panel";
 }
 
-export type SchematicPage = RackElevationPage | PrintSheetPage | PatchPanelViewPage;
+/** A standalone canvas (its own ReactFlow surface) for laying a floorplan/reference
+ *  image and, in the future, device/room markers. Stores its own node array so it is
+ *  fully isolated from the global schematic nodes/edges. */
+export interface FloorplanPage {
+  id: string;
+  label: string;
+  type: "floorplan";
+  /** Image nodes today; marker node types can be added later. */
+  nodes: SchematicNode[];
+}
+
+export type SchematicPage = RackElevationPage | PrintSheetPage | PatchPanelViewPage | FloorplanPage;
 
 /** Per-bundle metadata. Membership is on each connection's `data.bundleId`; this holds
  *  the label, an optional user-dragged trunk override, and collapse state. */
