@@ -20,6 +20,7 @@ import type {
   SchematicPage,
   RackElevationPage,
   PrintSheetPage,
+  FloorplanPage,
   PrintViewport,
   RackData,
   RackDevicePlacement,
@@ -285,6 +286,9 @@ interface SchematicState {
   loadSeq: number;
   editingNodeId: string | null;
   creatingNodeId: string | null;
+  /** True while Shift is held — used to temporarily lock image aspect ratio during a resize. */
+  shiftHeld: boolean;
+  setShiftHeld: (held: boolean) => void;
   customTemplates: DeviceTemplate[];
   ownedGear: OwnedGearItem[];
   showOwnedGearPane: boolean;
@@ -340,6 +344,13 @@ interface SchematicState {
   updateRoomLabel: (nodeId: string, label: string) => void;
   updateRoom: (nodeId: string, data: import("./types").RoomData) => void;
   updateAnnotation: (nodeId: string, data: Partial<import("./types").AnnotationData>) => void;
+  /** Add a floorplan/reference image node to the main schematic canvas (global nodes). */
+  addImageNode: (position: { x: number; y: number }, data: import("./types").ImageNodeData, size: { width: number; height: number }) => void;
+  /** Patch an image node's data. Resolves to the schematic (global nodes) or the active
+   *  floorplan page based on `activePage`. */
+  updateImageNode: (nodeId: string, patch: Partial<import("./types").ImageNodeData>) => void;
+  /** Toggle the locked (pinned) state of an image node (schematic or active floorplan page). */
+  toggleImageLock: (nodeId: string) => void;
   toggleRoomLock: (nodeId: string) => void;
   toggleEquipmentRack: (nodeId: string) => void;
   addNote: (position: { x: number; y: number }) => void;
@@ -669,6 +680,13 @@ interface SchematicState {
   addRackPage: (label: string) => string;
   removeRackPage: (pageId: string) => void;
   renameRackPage: (pageId: string, label: string) => void;
+  // Floorplan page CRUD + per-page image nodes
+  addFloorplanPage: (label?: string) => string;
+  removeFloorplanPage: (pageId: string) => void;
+  renameFloorplanPage: (pageId: string, label: string) => void;
+  duplicateFloorplanPage: (pageId: string) => string;
+  addFloorplanImage: (pageId: string, position: { x: number; y: number }, data: import("./types").ImageNodeData, size: { width: number; height: number }) => void;
+  onFloorplanNodesChange: (pageId: string, changes: import("@xyflow/react").NodeChange[]) => void;
   addRack: (pageId: string, rack: Omit<RackData, "id">) => string;
   removeRack: (pageId: string, rackId: string) => void;
   updateRack: (pageId: string, rackId: string, patch: Partial<RackData>) => void;
@@ -770,6 +788,11 @@ function nextRackPageId(): string {
   return `rackpage-${++rackPageIdCounter}`;
 }
 
+let floorplanPageIdCounter = 0;
+function nextFloorplanPageId(): string {
+  return `floorplan-${++floorplanPageIdCounter}`;
+}
+
 let rackIdCounter = 0;
 function nextRackId(): string {
   return `rack-${++rackIdCounter}`;
@@ -800,11 +823,18 @@ function mapElevationPage(pages: SchematicPage[], pageId: string, fn: (p: RackEl
   return pages.map((p) => (p.id === pageId && p.type === "rack-elevation") ? fn(p) : p);
 }
 
+/** Apply fn to the floorplan page with the given id; leave other pages untouched. */
+function mapFloorplanPage(pages: SchematicPage[], pageId: string, fn: (p: FloorplanPage) => FloorplanPage): SchematicPage[] {
+  return pages.map((p) => (p.id === pageId && p.type === "floorplan") ? fn(p) : p);
+}
+
 /** Sync rack-related counters from pages data. */
 function syncRackCounters(pages: SchematicPage[]) {
   for (const page of pages) {
     const pm = page.id.match(/^rackpage-(\d+)$/);
     if (pm) rackPageIdCounter = Math.max(rackPageIdCounter, Number(pm[1]));
+    const fm = page.id.match(/^floorplan-(\d+)$/);
+    if (fm) floorplanPageIdCounter = Math.max(floorplanPageIdCounter, Number(fm[1]));
     if (page.type === "print-sheet") {
       // Arrays default to [] — an older/partial page missing these would throw
       // "not iterable" here, AFTER importFromJSON already loaded the schematic,
@@ -817,6 +847,7 @@ function syncRackCounters(pages: SchematicPage[]) {
       }
       continue;
     }
+    if (page.type === "floorplan") continue;
     for (const rack of page.racks ?? []) {
       const rm = rack.id.match(/^rack-(\d+)$/);
       if (rm) rackIdCounter = Math.max(rackIdCounter, Number(rm[1]));
@@ -1253,6 +1284,8 @@ export const useSchematicStore = create<SchematicState>((set, get) => ({
   loadSeq: 0,
   editingNodeId: null,
   creatingNodeId: null,
+  shiftHeld: false,
+  setShiftHeld: (held) => { if (get().shiftHeld !== held) set({ shiftHeld: held }); },
   customTemplates: _initCustomTemplates,
   ownedGear: [],
   showOwnedGearPane: false,
@@ -1378,16 +1411,28 @@ export const useSchematicStore = create<SchematicState>((set, get) => ({
 
   onNodesChange: (changes) => {
     const updated = applyNodeChanges(changes, get().nodes) as SchematicNode[];
-    // Keep room zIndex pinned low (React Flow may reset it)
+    // Keep room/image zIndex pinned low (React Flow may reset it)
     const normalized = updated.map((n) => {
-      if (n.type !== "room") return n;
-      const locked = (n.data as import("./types").RoomData).locked;
-      return {
-        ...n,
-        zIndex: -1,
-        selectable: !locked,
-        className: locked ? "locked" : undefined,
-      };
+      if (n.type === "room") {
+        const locked = (n.data as import("./types").RoomData).locked;
+        return {
+          ...n,
+          zIndex: -1,
+          selectable: !locked,
+          className: locked ? "locked" : undefined,
+        };
+      }
+      if (n.type === "image") {
+        const locked = (n.data as import("./types").ImageNodeData).locked;
+        return {
+          ...n,
+          zIndex: -10,
+          draggable: locked ? false : undefined,
+          selectable: !locked,
+          className: locked ? "locked" : undefined,
+        };
+      }
+      return n;
     });
     // Mirror waypoint node positions back to canonical edge.data.manualWaypoints
     // so the router and persistence see drag/multi-select-drag results.
@@ -2985,6 +3030,79 @@ export const useSchematicStore = create<SchematicState>((set, get) => ({
     get().saveToLocalStorage();
   },
 
+  addImageNode: (position, data, size) => {
+    const state = get();
+    pushUndo({ nodes: state.nodes, edges: state.edges });
+    const id = `image-${Date.now()}`;
+    const newNode = {
+      id,
+      type: "image" as const,
+      position,
+      data,
+      style: { width: size.width, height: size.height },
+      zIndex: -10,
+    } as SchematicNode;
+    set({ nodes: [...state.nodes, newNode], editingNodeId: id });
+    get().saveToLocalStorage();
+  },
+
+  updateImageNode: (nodeId, patch) => {
+    const state = get();
+    pushUndo({ nodes: state.nodes, edges: state.edges });
+    const patchNode = (n: SchematicNode): SchematicNode => {
+      if (n.id !== nodeId || n.type !== "image") return n;
+      const nextData = { ...n.data, ...patch } as import("./types").ImageNodeData;
+      const locked = nextData.locked;
+      return {
+        ...n,
+        draggable: locked ? false : undefined,
+        selectable: !locked,
+        className: locked ? "locked" : undefined,
+        data: nextData,
+      } as SchematicNode;
+    };
+    if (state.activePage === "schematic") {
+      set({ nodes: state.nodes.map(patchNode) });
+    } else {
+      set({
+        pages: state.pages.map((p) =>
+          p.id === state.activePage && p.type === "floorplan"
+            ? { ...p, nodes: p.nodes.map(patchNode) }
+            : p
+        ),
+      });
+    }
+    get().saveToLocalStorage();
+  },
+
+  toggleImageLock: (nodeId) => {
+    const state = get();
+    pushUndo({ nodes: state.nodes, edges: state.edges });
+    const toggle = (n: SchematicNode): SchematicNode => {
+      if (n.id !== nodeId || n.type !== "image") return n;
+      const locked = !(n.data as import("./types").ImageNodeData).locked;
+      return {
+        ...n,
+        draggable: locked ? false : undefined,
+        selectable: !locked,
+        className: locked ? "locked" : undefined,
+        data: { ...n.data, locked: locked || undefined }, // keep JSON clean
+      } as SchematicNode;
+    };
+    if (state.activePage === "schematic") {
+      set({ nodes: state.nodes.map(toggle) });
+    } else {
+      set({
+        pages: state.pages.map((p) =>
+          p.id === state.activePage && p.type === "floorplan"
+            ? { ...p, nodes: p.nodes.map(toggle) }
+            : p
+        ),
+      });
+    }
+    get().saveToLocalStorage();
+  },
+
   toggleRoomLock: (nodeId) => {
     const state = get();
     pushUndo({ nodes: state.nodes, edges: state.edges });
@@ -4028,6 +4146,94 @@ export const useSchematicStore = create<SchematicState>((set, get) => ({
     get().saveToLocalStorage();
   },
 
+  addFloorplanPage: (label) => {
+    const state = get();
+    pushUndo({ nodes: state.nodes, edges: state.edges });
+    const id = nextFloorplanPageId();
+    const pageLabel = label ?? `Floorplan ${state.pages.filter((p) => p.type === "floorplan").length + 1}`;
+    const page: FloorplanPage = { id, label: pageLabel, type: "floorplan", nodes: [] };
+    set({ pages: [...state.pages, page], activePage: id, undoSize: undoStack.length, redoSize: 0 });
+    get().saveToLocalStorage();
+    return id;
+  },
+
+  removeFloorplanPage: (pageId) => {
+    const state = get();
+    pushUndo({ nodes: state.nodes, edges: state.edges });
+    const pages = state.pages.filter((p) => p.id !== pageId);
+    const activePage = state.activePage === pageId ? "schematic" : state.activePage;
+    set({ pages, activePage, undoSize: undoStack.length, redoSize: 0 });
+    get().saveToLocalStorage();
+  },
+
+  renameFloorplanPage: (pageId, label) => {
+    const state = get();
+    pushUndo({ nodes: state.nodes, edges: state.edges });
+    set({ pages: state.pages.map((p) => p.id === pageId ? { ...p, label } : p), undoSize: undoStack.length, redoSize: 0 });
+    get().saveToLocalStorage();
+  },
+
+  duplicateFloorplanPage: (pageId) => {
+    const state = get();
+    const src = state.pages.find((p) => p.id === pageId && p.type === "floorplan") as FloorplanPage | undefined;
+    if (!src) return "";
+    pushUndo({ nodes: state.nodes, edges: state.edges });
+    const newPageId = nextFloorplanPageId();
+    const newPage: FloorplanPage = {
+      id: newPageId,
+      label: `${src.label} (copy)`,
+      type: "floorplan",
+      nodes: src.nodes.map((n) => ({ ...n, id: `image-${Date.now()}-${Math.random().toString(36).slice(2, 7)}` })),
+    };
+    const idx = state.pages.findIndex((p) => p.id === pageId);
+    const pages = [...state.pages.slice(0, idx + 1), newPage, ...state.pages.slice(idx + 1)];
+    set({ pages, activePage: newPageId, undoSize: undoStack.length, redoSize: 0 });
+    get().saveToLocalStorage();
+    return newPageId;
+  },
+
+  addFloorplanImage: (pageId, position, data, size) => {
+    const state = get();
+    pushUndo({ nodes: state.nodes, edges: state.edges });
+    const id = `image-${Date.now()}`;
+    const newNode = {
+      id,
+      type: "image" as const,
+      position,
+      data,
+      style: { width: size.width, height: size.height },
+      zIndex: -10,
+    } as SchematicNode;
+    set({
+      pages: mapFloorplanPage(state.pages, pageId, (p) => ({ ...p, nodes: [...p.nodes, newNode] })),
+      editingNodeId: id,
+      undoSize: undoStack.length, redoSize: 0,
+    });
+    get().saveToLocalStorage();
+  },
+
+  onFloorplanNodesChange: (pageId, changes) => {
+    const state = get();
+    set({
+      pages: mapFloorplanPage(state.pages, pageId, (p) => {
+        const updated = applyNodeChanges(changes, p.nodes) as SchematicNode[];
+        const normalized = updated.map((n) => {
+          if (n.type !== "image") return n;
+          const locked = (n.data as import("./types").ImageNodeData).locked;
+          return {
+            ...n,
+            zIndex: -10,
+            draggable: locked ? false : undefined,
+            selectable: !locked,
+            className: locked ? "locked" : undefined,
+          };
+        });
+        return { ...p, nodes: normalized };
+      }),
+    });
+    get().saveToLocalStorage();
+  },
+
   addRack: (pageId, rackData) => {
     const state = get();
     pushUndo({ nodes: state.nodes, edges: state.edges });
@@ -4596,7 +4802,7 @@ export const useSchematicStore = create<SchematicState>((set, get) => ({
           ),
         };
       }
-      if (p.id === srcPageId) {
+      if (p.id === srcPageId && p.type === "rack-elevation") {
         return {
           ...p,
           racks: p.racks.filter((r) => r.id !== rackId),
@@ -4604,7 +4810,7 @@ export const useSchematicStore = create<SchematicState>((set, get) => ({
           accessories: p.accessories.filter((a) => a.rackId !== rackId),
         };
       }
-      if (p.id === dstPageId) {
+      if (p.id === dstPageId && p.type === "rack-elevation") {
         return {
           ...p,
           racks: [...p.racks, rack],

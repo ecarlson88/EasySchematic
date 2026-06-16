@@ -3,6 +3,7 @@ import DeviceNodeComponent from "./components/DeviceNode";
 import RoomNodeComponent from "./components/RoomNode";
 import NoteNodeComponent from "./components/NoteNode";
 import AnnotationNodeComponent from "./components/AnnotationNode";
+import ImageNodeComponent from "./components/ImageNode";
 import StubLabelNodeComponent from "./components/StubLabelNode";
 import WaypointNodeComponent from "./components/WaypointNode";
 import BundleJunctionNodeComponent from "./components/BundleJunctionNode";
@@ -13,6 +14,7 @@ export const nodeTypes: NodeTypes = {
   room: RoomNodeComponent,
   note: NoteNodeComponent,
   annotation: AnnotationNodeComponent,
+  image: ImageNodeComponent,
   "stub-label": StubLabelNodeComponent,
   waypoint: WaypointNodeComponent,
   "bundle-junction": BundleJunctionNodeComponent,

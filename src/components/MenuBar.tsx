@@ -7,6 +7,7 @@ import { exportPdf } from "../pdfExport";
 import { exportTemplatesToFile, readTemplateFile } from "../templateExport";
 import { loadSchematicTemplate } from "../templateApi";
 import { getPaperSize } from "../printConfig";
+import { importImageFile, fitImageSize } from "../imageImport";
 import type { SchematicFile, SchematicNode, AnnotationData } from "../types";
 import ReportsDialog, { type ReportsTab } from "./ReportsDialog";
 import TitleBlockDialog from "./TitleBlockDialog";
@@ -135,6 +136,7 @@ export default function MenuBar() {
   const reactFlowInstance = useReactFlow();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const archiveInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const menuBarRef = useRef<HTMLDivElement>(null);
 
   const { isDark, toggle: toggleTheme } = useTheme();
@@ -553,6 +555,27 @@ export default function MenuBar() {
     state.saveToLocalStorage();
   }, [reactFlowInstance]);
 
+  const handleImportImage = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-importing the same file
+    if (!file) return;
+    try {
+      const img = await importImageFile(file);
+      const size = fitImageSize(img.naturalWidth, img.naturalHeight);
+      const viewport = reactFlowInstance.getViewport();
+      // Center of the current viewport, minus half the image so it lands centered.
+      const cx = (-viewport.x + window.innerWidth / 2) / viewport.zoom;
+      const cy = (-viewport.y + window.innerHeight / 2) / viewport.zoom;
+      useSchematicStore.getState().addImageNode(
+        { x: cx - size.width / 2, y: cy - size.height / 2 },
+        { src: img.src, naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight, opacity: 100, lockAspect: true },
+        size
+      );
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Could not import image.");
+    }
+  }, [reactFlowInstance]);
+
   const handleNew = useCallback(async () => {
     if (isLoggedIn && isOnline) {
       try {
@@ -603,6 +626,8 @@ export default function MenuBar() {
       { type: "item", label: "Add Circle", onClick: () => addAnnotation("circle") },
       { type: "item", label: "Add Diamond", onClick: () => addAnnotation("diamond") },
       { type: "item", label: "Add Triangle", onClick: () => addAnnotation("triangle") },
+      { type: "separator" },
+      { type: "item", label: "Add Image...", onClick: () => imageInputRef.current?.click() },
     ],
     View: [
       {
@@ -1033,6 +1058,13 @@ export default function MenuBar() {
         accept=".json"
         className="hidden"
         onChange={handleImportArchive}
+      />
+      <input
+        ref={imageInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleImportImage}
       />
 
       {reportsTab && (
