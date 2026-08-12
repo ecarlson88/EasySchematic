@@ -51,6 +51,8 @@ import StubLabelContextMenu from "./components/StubLabelContextMenu";
 import TextStubContextMenu from "./components/TextStubContextMenu";
 import RoomEditor from "./components/RoomEditor";
 import AnnotationEditor from "./components/AnnotationEditor";
+import ImagePropertiesEditor from "./components/ImagePropertiesEditor";
+import FloorplanCanvas from "./components/FloorplanCanvas";
 import QuickAddDevice from "./components/QuickAddDevice";
 import DeviceCreatorPicker from "./components/DeviceCreatorPicker";
 import PageTabs from "./components/PageTabs";
@@ -1870,6 +1872,22 @@ export default function App() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [undo, redo]);
 
+  // Track Shift globally (every page) so image resizing can temporarily lock aspect ratio.
+  useEffect(() => {
+    const setShift = useSchematicStore.getState().setShiftHeld;
+    const down = (e: KeyboardEvent) => { if (e.key === "Shift") setShift(true); };
+    const up = (e: KeyboardEvent) => { if (e.key === "Shift") setShift(false); };
+    const blur = () => setShift(false);
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
+    window.addEventListener("blur", blur);
+    return () => {
+      window.removeEventListener("keydown", down);
+      window.removeEventListener("keyup", up);
+      window.removeEventListener("blur", blur);
+    };
+  }, []);
+
   return (
     <div className="flex flex-col h-full">
       <div data-print-hide>
@@ -1900,12 +1918,15 @@ export default function App() {
         <PrintSheetPage />
       ) : activePgType === "patch-panel" ? (
         <PatchPanelPage />
+      ) : activePgType === "floorplan" ? (
+        <FloorplanCanvas />
       ) : (
         <RackPage />
       )}
       <DeviceEditor />
       <RoomEditor />
       <AnnotationEditor />
+      <ImagePropertiesEditor />
       <EdgeContextMenu />
       <RoomContextMenu />
       <DeviceContextMenu />
