@@ -1,6 +1,6 @@
 import { type ReactFlowInstance } from "@xyflow/react";
 import { jsPDF } from "jspdf";
-import { toPng } from "html-to-image";
+import { toBlob } from "html-to-image";
 import { freezeSvgColors } from "./freezeSvgColors";
 import {
   type PaperSize,
@@ -36,6 +36,12 @@ const TARGET_PIXEL_RATIO = 5;
 // Cap raster dimension to stay under browser canvas limits (~16384px in Chrome)
 // on huge custom paper sizes. Falls back to a lower effective DPI on those.
 const MAX_RASTER_DIMENSION_PX = 12000;
+// Also cap total pixels per page: a large-format sheet under the per-side cap
+// alone could still be a 400MB+ bitmap, which stacks up over a multi-page
+// capture loop and near-crashed an 8GB machine (#383). 64MP keeps Letter at the
+// full 480 DPI untouched and only lowers effective DPI on big sheets, where the
+// viewing distance is larger anyway.
+const MAX_RASTER_AREA_PX = 64_000_000;
 
 // ─── Inter font embedding for jsPDF ───
 
@@ -772,14 +778,20 @@ export async function exportPdf(
       const longestSidePx = Math.max(contentWPx, contentHPx);
       const pixelRatio = Math.max(
         1,
-        Math.min(TARGET_PIXEL_RATIO, MAX_RASTER_DIMENSION_PX / longestSidePx),
+        Math.min(
+          TARGET_PIXEL_RATIO,
+          MAX_RASTER_DIMENSION_PX / longestSidePx,
+          Math.sqrt(MAX_RASTER_AREA_PX / (contentWPx * contentHPx)),
+        ),
       );
       // Freeze var(--color-…) strokes to concrete colors so Chromium's
       // html-to-image clone keeps the connection lines (#173).
       const restoreColors = freezeSvgColors(viewportEl);
-      let dataUrl: string;
+      // Capture to a Blob, not a base64 data URL — the URL held each page's raster
+      // twice over as a giant string on top of jsPDF's own copy (#383).
+      let pageBlob: Blob | null;
       try {
-        dataUrl = await toPng(viewportEl, {
+        pageBlob = await toBlob(viewportEl, {
           backgroundColor: "#ffffff",
           width: contentWPx,
           height: contentHPx,
@@ -795,11 +807,13 @@ export async function exportPdf(
         restoreColors();
         CSSStyleDeclaration.prototype.getPropertyValue = origGetPropertyValue;
       }
+      if (!pageBlob) continue;
+      const pagePng = new Uint8Array(await pageBlob.arrayBuffer());
 
       // Add image to PDF page (full height minus margins — title block drawn on top)
       const imgWidthIn = pageWIn - 2 * PAGE_MARGIN_IN;
       const imgHeightIn = pageHIn - 2 * PAGE_MARGIN_IN;
-      doc.addImage(dataUrl, "PNG", PAGE_MARGIN_IN, PAGE_MARGIN_IN, imgWidthIn, imgHeightIn, undefined, "FAST");
+      doc.addImage(pagePng, "PNG", PAGE_MARGIN_IN, PAGE_MARGIN_IN, imgWidthIn, imgHeightIn, undefined, "FAST");
 
       // Draw content border and title block with vector graphics
       drawContentBorder(doc, pageWIn, pageHIn);

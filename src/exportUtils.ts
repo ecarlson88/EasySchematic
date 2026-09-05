@@ -1,8 +1,16 @@
 import { type ReactFlowInstance, getViewportForBounds } from "@xyflow/react";
-import { toPng, toSvg } from "html-to-image";
+import { toBlob, toSvg } from "html-to-image";
 import { freezeSvgColors } from "./freezeSvgColors";
 
 const EXPORT_PADDING = 40;
+// Cap the raster so a large schematic can't demand a multi-gigapixel canvas —
+// pixelRatio 4 over the full bounds was allocating GBs and near-crashing 8GB
+// machines (#383). Per-side cap matches pdfExport.ts; the area cap additionally
+// bounds layouts that are big in BOTH dimensions (12000×12000 alone would be a
+// 576MB bitmap). The ratio may fall below 1 for outsized schematics: capping the
+// output is the point.
+const MAX_RASTER_DIMENSION_PX = 12000;
+const MAX_RASTER_AREA_PX = 64_000_000;
 
 interface ExportOptions {
   pixelRatio?: number;
@@ -37,7 +45,11 @@ export async function exportImage(
   ) as HTMLElement;
   if (!viewportEl) return;
 
-  const toImage = format === "svg" ? toSvg : toPng;
+  const effectivePixelRatio = Math.min(
+    pixelRatio,
+    MAX_RASTER_DIMENSION_PX / Math.max(width, height),
+    Math.sqrt(MAX_RASTER_AREA_PX / (width * height)),
+  );
 
   // Firefox returns `undefined` from getPropertyValue() for unrecognized CSS
   // properties, but html-to-image calls .trim() on the result without a null
@@ -58,28 +70,44 @@ export async function exportImage(
   // clone keeps the connection lines (#173).
   const restoreColors = freezeSvgColors(viewportEl);
 
-  let dataUrl: string;
+  // Download from a Blob, never a base64 data URL: the URL doubles the image in
+  // memory as a giant string, and Chrome silently drops data-URL downloads past
+  // ~2MB — both bite on exactly the large schematics of #383.
+  let blob: Blob | null;
   try {
-    dataUrl = await toImage(viewportEl, {
+    const captureOptions = {
       backgroundColor,
       width,
       height,
-      pixelRatio: format === "svg" ? 1 : pixelRatio,
+      pixelRatio: format === "svg" ? 1 : effectivePixelRatio,
       style: {
         width: `${width}px`,
         height: `${height}px`,
         transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.zoom})`,
       },
-    });
+    };
+    if (format === "svg") {
+      const dataUrl = await toSvg(viewportEl, captureOptions);
+      const svgText = decodeURIComponent(
+        dataUrl.replace(/^data:image\/svg\+xml;charset=utf-8,/, ""),
+      );
+      blob = new Blob([svgText], { type: "image/svg+xml" });
+    } else {
+      blob = await toBlob(viewportEl, captureOptions);
+    }
   } finally {
     restoreColors();
     CSSStyleDeclaration.prototype.getPropertyValue = origGetPropertyValue;
     document.documentElement.removeAttribute("data-export-capturing");
   }
+  if (!blob) return;
 
   // Trigger download
+  const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.download = `schematic.${format}`;
-  link.href = dataUrl;
+  link.href = url;
   link.click();
+  // The click only queues the download; revoke after it has been picked up.
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
