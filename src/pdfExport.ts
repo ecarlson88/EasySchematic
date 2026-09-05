@@ -2,6 +2,7 @@ import { type ReactFlowInstance } from "@xyflow/react";
 import { jsPDF } from "jspdf";
 import { toBlob } from "html-to-image";
 import { freezeSvgColors } from "./freezeSvgColors";
+import { capExportPixelRatio } from "./exportUtils";
 import {
   type PaperSize,
   type Orientation,
@@ -33,15 +34,12 @@ const DPI = 96;
 // The "FAST" deflate compression on addImage below keeps PDF sizes in check
 // independently of pixelRatio — see commit 38ce285.
 const TARGET_PIXEL_RATIO = 5;
-// Cap raster dimension to stay under browser canvas limits (~16384px in Chrome)
-// on huge custom paper sizes. Falls back to a lower effective DPI on those.
-const MAX_RASTER_DIMENSION_PX = 12000;
-// Also cap total pixels per page: a large-format sheet under the per-side cap
-// alone could still be a 400MB+ bitmap, which stacks up over a multi-page
-// capture loop and near-crashed an 8GB machine (#383). 64MP keeps Letter at the
-// full 480 DPI untouched and only lowers effective DPI on big sheets, where the
-// viewing distance is larger anyway.
-const MAX_RASTER_AREA_PX = 64_000_000;
+// The per-side and per-page-area raster caps live in capExportPixelRatio
+// (shared with image export so the budgets can't drift). 64MP keeps Letter at
+// the full 480 DPI untouched and only lowers effective DPI on big sheets, where
+// the viewing distance is larger anyway. The ratio may fall below 1 on huge
+// custom paper (user-settable to 200in/side) — flooring it at 1 there would
+// reintroduce the multi-hundred-MB per-page bitmaps of #383.
 
 // ─── Inter font embedding for jsPDF ───
 
@@ -707,6 +705,7 @@ export async function exportPdf(
     await loadInterFont(doc);
   } catch (err) {
     console.error("Failed to load Inter font for PDF:", err);
+    useSchematicStore.getState().addToast("PDF export failed — couldn't load the embedded font.", "error");
     removeLoadingOverlay();
     return;
   }
@@ -775,15 +774,7 @@ export async function exportPdf(
       CSSStyleDeclaration.prototype.getPropertyValue = function (prop) {
         return origGetPropertyValue.call(this, prop) ?? '';
       };
-      const longestSidePx = Math.max(contentWPx, contentHPx);
-      const pixelRatio = Math.max(
-        1,
-        Math.min(
-          TARGET_PIXEL_RATIO,
-          MAX_RASTER_DIMENSION_PX / longestSidePx,
-          Math.sqrt(MAX_RASTER_AREA_PX / (contentWPx * contentHPx)),
-        ),
-      );
+      const pixelRatio = capExportPixelRatio(TARGET_PIXEL_RATIO, contentWPx, contentHPx);
       // Freeze var(--color-…) strokes to concrete colors so Chromium's
       // html-to-image clone keeps the connection lines (#173).
       const restoreColors = freezeSvgColors(viewportEl);
@@ -807,7 +798,12 @@ export async function exportPdf(
         restoreColors();
         CSSStyleDeclaration.prototype.getPropertyValue = origGetPropertyValue;
       }
-      if (!pageBlob) continue;
+      // canvas.toBlob resolves null when the browser can't encode the raster.
+      // The page was already added to the doc, so continuing here would ship a
+      // silently blank sheet in the middle of a client deliverable — abort loudly.
+      if (!pageBlob) {
+        throw new Error(`Couldn't render page ${i + 1} of ${pages.length} — the sheet is too large for this browser.`);
+      }
       const pagePng = new Uint8Array(await pageBlob.arrayBuffer());
 
       // Add image to PDF page (full height minus margins — title block drawn on top)
@@ -846,6 +842,13 @@ export async function exportPdf(
     // Save the PDF
     updateProgress("Saving PDF...");
     doc.save(`${fileName}.pdf`);
+  } catch (err) {
+    // Callers fire-and-forget exportPdf, so an unsurfaced throw is an invisible
+    // failure — no download and no explanation.
+    console.error("PDF export failed:", err);
+    useSchematicStore
+      .getState()
+      .addToast(`PDF export failed — ${err instanceof Error ? err.message : "unexpected error"}`, "error");
   } finally {
     // Restore everything
     document.documentElement.removeAttribute("data-export-capturing");

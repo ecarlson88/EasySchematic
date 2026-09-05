@@ -1095,6 +1095,38 @@ let suppressedUndoPushes: { count: number } | null = null;
 /** Same idea for saveToLocalStorage: a bulk loop saves once at the end, not per step. */
 let deferredSave: { pending: boolean } | null = null;
 
+/**
+ * Trailing-debounce autosave for the paths that fire every pointer-move frame —
+ * node drags, marquee sweeps, NodeResizer gestures, print-sheet viewport drags.
+ * Serializing the whole schematic on each frame thrashed RAM on ~100-object
+ * selections (#384). A trailing debounce needs no per-gesture end signal, so it
+ * also covers gestures that never send one (an aborted touch drag emits no
+ * dragging=false batch). Discrete actions keep calling saveToLocalStorage
+ * directly; the pagehide/hidden flush below covers a close straight after a
+ * gesture.
+ */
+const AUTOSAVE_DEBOUNCE_MS = 250;
+let autosaveTimer: ReturnType<typeof setTimeout> | null = null;
+function scheduleAutosave() {
+  if (autosaveTimer !== null) clearTimeout(autosaveTimer);
+  autosaveTimer = setTimeout(() => {
+    autosaveTimer = null;
+    useSchematicStore.getState().saveToLocalStorage();
+  }, AUTOSAVE_DEBOUNCE_MS);
+}
+function flushAutosave() {
+  if (autosaveTimer === null) return;
+  clearTimeout(autosaveTimer);
+  autosaveTimer = null;
+  useSchematicStore.getState().saveToLocalStorage();
+}
+if (typeof window !== "undefined") {
+  window.addEventListener("pagehide", flushAutosave);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") flushAutosave();
+  });
+}
+
 /** Edge ID being reconnected — excluded from isValidConnection duplicate checks. */
 let _reconnectingEdgeId: string | null = null;
 export function setReconnectingEdgeId(id: string | null) {
@@ -2168,15 +2200,7 @@ export const useSchematicStore = create<SchematicState>((set, get) => ({
       ? syncEdgesFromWaypointNodes(oldEdges, normalized)
       : oldEdges;
     set({ nodes: normalized, ...(newEdges !== oldEdges ? { edges: newEdges } : {}) });
-    // A drag streams position changes every frame, and a marquee sweep streams
-    // selection batches as nodes enter it; serializing the whole schematic to
-    // localStorage on each one thrashed RAM on large multi-selections (#384).
-    // The drag-end change arrives with dragging=false so that save still lands,
-    // and selection isn't meaningful persisted state to begin with.
-    const transient = changes.every(
-      (c) => c.type === "select" || (c.type === "position" && c.dragging),
-    );
-    if (!transient) get().saveToLocalStorage();
+    scheduleAutosave();
   },
 
   onEdgesChange: (changes) => {
@@ -2195,9 +2219,7 @@ export const useSchematicStore = create<SchematicState>((set, get) => ({
     } else {
       set({ edges: newEdges });
     }
-    // Selection-only batches skip the save: `selected` is stripped from persisted
-    // edges anyway, and a marquee sweep streams these while it grows (#384).
-    if (!changes.every((c) => c.type === "select")) get().saveToLocalStorage();
+    scheduleAutosave();
   },
 
   onConnect: (connection) => {
@@ -6029,7 +6051,9 @@ export const useSchematicStore = create<SchematicState>((set, get) => ({
       return { ...p, viewports: p.viewports.map((v) => v.id === viewportId ? { ...v, ...patch } : v) };
     });
     set({ pages: updatedPages });
-    get().saveToLocalStorage();
+    // Driven per pointer-move while dragging/resizing a print-sheet viewport —
+    // same every-frame serialization cost as node drags (#384).
+    scheduleAutosave();
   },
 
   removeViewport: (pageId, viewportId) => {
@@ -6137,7 +6161,10 @@ export const useSchematicStore = create<SchematicState>((set, get) => ({
     const data: SchematicFile = {
       version: CURRENT_SCHEMA_VERSION,
       name: state.schematicName,
-      nodes: state.nodes,
+      // `selected` is transient UI state on both nodes and edges: persisting it
+      // resurrects a stale selection on reload, which the next Delete keypress
+      // would then operate on.
+      nodes: state.nodes.map(({ selected: _s, ...rest }) => rest) as SchematicNode[],
       edges: state.edges.map(({ zIndex: _, selected: _s, ...rest }) => rest) as ConnectionEdge[],
       ownedGear: state.ownedGear.length > 0 ? state.ownedGear : undefined,
       signalColors: state.signalColors,
@@ -6438,7 +6465,7 @@ export const useSchematicStore = create<SchematicState>((set, get) => ({
     return {
       version: CURRENT_SCHEMA_VERSION,
       name: state.schematicName,
-      nodes: state.nodes,
+      nodes: state.nodes.map(({ selected: _s, ...rest }) => rest) as SchematicNode[],
       edges: state.edges.map(({ zIndex: _, selected: _s, ...rest }) => rest) as ConnectionEdge[],
       customTemplates: state.customTemplates.length > 0 ? state.customTemplates : undefined,
       ownedGear: state.ownedGear.length > 0 ? state.ownedGear : undefined,

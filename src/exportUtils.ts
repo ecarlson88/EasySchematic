@@ -1,16 +1,31 @@
 import { type ReactFlowInstance, getViewportForBounds } from "@xyflow/react";
 import { toBlob, toSvg } from "html-to-image";
 import { freezeSvgColors } from "./freezeSvgColors";
+import { useSchematicStore } from "./store";
 
 const EXPORT_PADDING = 40;
-// Cap the raster so a large schematic can't demand a multi-gigapixel canvas —
+// Cap the raster so a large capture can't demand a multi-gigapixel canvas —
 // pixelRatio 4 over the full bounds was allocating GBs and near-crashing 8GB
-// machines (#383). Per-side cap matches pdfExport.ts; the area cap additionally
-// bounds layouts that are big in BOTH dimensions (12000×12000 alone would be a
-// 576MB bitmap). The ratio may fall below 1 for outsized schematics: capping the
-// output is the point.
+// machines (#383). The per-side cap stays under browser canvas limits (~16384px
+// in Chrome); the area cap additionally bounds captures that are big in BOTH
+// dimensions (12000×12000 alone would be a 576MB bitmap).
 const MAX_RASTER_DIMENSION_PX = 12000;
 const MAX_RASTER_AREA_PX = 64_000_000;
+
+/** Largest pixelRatio that keeps a widthPx×heightPx capture inside the raster
+ *  caps. Shared by image and PDF export so their budgets can't drift. May fall
+ *  below 1 for outsized captures — downsampling the output is the point. */
+export function capExportPixelRatio(
+  target: number,
+  widthPx: number,
+  heightPx: number,
+): number {
+  return Math.min(
+    target,
+    MAX_RASTER_DIMENSION_PX / Math.max(widthPx, heightPx),
+    Math.sqrt(MAX_RASTER_AREA_PX / (widthPx * heightPx)),
+  );
+}
 
 interface ExportOptions {
   pixelRatio?: number;
@@ -45,11 +60,7 @@ export async function exportImage(
   ) as HTMLElement;
   if (!viewportEl) return;
 
-  const effectivePixelRatio = Math.min(
-    pixelRatio,
-    MAX_RASTER_DIMENSION_PX / Math.max(width, height),
-    Math.sqrt(MAX_RASTER_AREA_PX / (width * height)),
-  );
+  const effectivePixelRatio = capExportPixelRatio(pixelRatio, width, height);
 
   // Firefox returns `undefined` from getPropertyValue() for unrecognized CSS
   // properties, but html-to-image calls .trim() on the result without a null
@@ -100,7 +111,15 @@ export async function exportImage(
     CSSStyleDeclaration.prototype.getPropertyValue = origGetPropertyValue;
     document.documentElement.removeAttribute("data-export-capturing");
   }
-  if (!blob) return;
+  // canvas.toBlob resolves null when the browser can't encode the raster (iOS
+  // Safari caps canvas area well below our own limits) — say so instead of a
+  // silent no-op.
+  if (!blob) {
+    useSchematicStore
+      .getState()
+      .addToast("Export failed — the schematic is too large for this browser to render as an image.", "error");
+    return;
+  }
 
   // Trigger download
   const url = URL.createObjectURL(blob);
