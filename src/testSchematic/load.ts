@@ -13,6 +13,7 @@ import { useSchematicStore } from "../store";
 /** URL query flag that seeds the fixture on load. */
 export const FIXTURE_PARAM = "fixture";
 export const FIXTURE_VALUE = "test";
+export const STRESS_FIXTURE_VALUE = "stress";
 
 /** Name the fixture carries, used to recognise it as already loaded. */
 const FIXTURE_NAME = "EasySchematic Test Fixture";
@@ -29,7 +30,10 @@ const FIXTURE_NAME = "EasySchematic Test Fixture";
 function confirmOverwrite(): boolean {
   const state = useSchematicStore.getState();
   const hasContent = state.nodes.some((n) => n.type === "device");
-  if (!hasContent || state.isDemo || state.schematicName === FIXTURE_NAME) return true;
+  // Literal instead of importing STRESS_FIXTURE_NAME: stress.ts stays a dynamic
+  // import so the generator never rides in the initial bundle.
+  const isFixture = state.schematicName === FIXTURE_NAME || state.schematicName === "EasySchematic Stress Fixture";
+  if (!hasContent || state.isDemo || isFixture) return true;
   return window.confirm(
     "Load the test schematic?\n\n" +
       `This replaces the schematic you have open ("${state.schematicName}") — ` +
@@ -54,6 +58,18 @@ export async function loadTestSchematic(): Promise<boolean> {
 }
 
 /**
+ * Replace the current schematic with the generated stress fixture (~120 devices,
+ * chained connections) — the scale the curated fixture deliberately isn't. Used
+ * by `?fixture=stress` for RAM/perf test-report items (#383/#384).
+ */
+export async function loadStressSchematic(): Promise<boolean> {
+  if (!confirmOverwrite()) return false;
+  const { buildStressSchematic } = await import("./stress");
+  useSchematicStore.getState().importFromJSON(buildStressSchematic());
+  return true;
+}
+
+/**
  * Seed the fixture when the URL asks for it, then strip the flag so a reload
  * (or a share of the address bar) doesn't silently wipe the user's work again.
  *
@@ -62,9 +78,10 @@ export async function loadTestSchematic(): Promise<boolean> {
  */
 export function loadTestSchematicFromUrl(): void {
   const params = new URLSearchParams(window.location.search);
-  if (params.get(FIXTURE_PARAM) !== FIXTURE_VALUE) return;
+  const value = params.get(FIXTURE_PARAM);
+  if (value !== FIXTURE_VALUE && value !== STRESS_FIXTURE_VALUE) return;
   params.delete(FIXTURE_PARAM);
   const query = params.toString();
   window.history.replaceState(null, "", window.location.pathname + (query ? `?${query}` : ""));
-  void loadTestSchematic();
+  void (value === STRESS_FIXTURE_VALUE ? loadStressSchematic() : loadTestSchematic());
 }

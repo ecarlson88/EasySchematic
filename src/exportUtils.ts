@@ -4,26 +4,39 @@ import { freezeSvgColors } from "./freezeSvgColors";
 import { useSchematicStore } from "./store";
 
 const EXPORT_PADDING = 40;
-// Cap the raster so a large capture can't demand a multi-gigapixel canvas —
-// pixelRatio 4 over the full bounds was allocating GBs and near-crashing 8GB
-// machines (#383). The per-side cap stays under browser canvas limits (~16384px
-// in Chrome); the area cap additionally bounds captures that are big in BOTH
-// dimensions (12000×12000 alone would be a 576MB bitmap).
-const MAX_RASTER_DIMENSION_PX = 12000;
-const MAX_RASTER_AREA_PX = 64_000_000;
 
-/** Largest pixelRatio that keeps a widthPx×heightPx capture inside the raster
- *  caps. Shared by image and PDF export so their budgets can't drift. May fall
- *  below 1 for outsized captures — downsampling the output is the point. */
+export interface RasterBudget {
+  /** Longest allowed side of the output bitmap. */
+  maxDimensionPx: number;
+  /** Total allowed pixels of the output bitmap. */
+  maxAreaPx: number;
+}
+
+// Image-download budget: caps the raster so a large capture can't demand a
+// multi-gigapixel canvas — pixelRatio 4 over the full schematic bounds was
+// allocating GBs and near-crashing 8GB machines (#383). Kept deliberately
+// tighter than the PDF page budget (pdfExport.ts): full-schematic bounds are
+// unbounded in a way paper sizes never are. The area cap additionally bounds
+// captures big in BOTH dimensions (12000×12000 alone would be a 576MB bitmap).
+const IMAGE_RASTER_BUDGET: RasterBudget = {
+  maxDimensionPx: 12000,
+  maxAreaPx: 64_000_000,
+};
+
+/** Largest pixelRatio that keeps a widthPx×heightPx capture inside the budget.
+ *  One formula shared by image and PDF export — the budgets differ on purpose
+ *  (see each budget's rationale), the math must not. May fall below 1 for
+ *  outsized captures — downsampling the output is the point. */
 export function capExportPixelRatio(
   target: number,
   widthPx: number,
   heightPx: number,
+  budget: RasterBudget = IMAGE_RASTER_BUDGET,
 ): number {
   return Math.min(
     target,
-    MAX_RASTER_DIMENSION_PX / Math.max(widthPx, heightPx),
-    Math.sqrt(MAX_RASTER_AREA_PX / (widthPx * heightPx)),
+    budget.maxDimensionPx / Math.max(widthPx, heightPx),
+    Math.sqrt(budget.maxAreaPx / (widthPx * heightPx)),
   );
 }
 

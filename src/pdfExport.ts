@@ -34,12 +34,18 @@ const DPI = 96;
 // The "FAST" deflate compression on addImage below keeps PDF sizes in check
 // independently of pixelRatio — see commit 38ce285.
 const TARGET_PIXEL_RATIO = 5;
-// The per-side and per-page-area raster caps live in capExportPixelRatio
-// (shared with image export so the budgets can't drift). 64MP keeps Letter at
-// the full 480 DPI untouched and only lowers effective DPI on big sheets, where
-// the viewing distance is larger anyway. The ratio may fall below 1 on huge
-// custom paper (user-settable to 200in/side) — flooring it at 1 there would
-// reintroduce the multi-hundred-MB per-page bitmaps of #383.
+// PDF pages get a larger raster budget than image export: the 64MP cap made
+// big custom sheets visibly fuzzy (~104 DPI on a 100×60in sheet) and the
+// 2026-09-05 test pass rejected that — "trade back memory". 16000px stays
+// under Chrome's 16384px hard canvas limit; 160MP is a ~640MB RGBA transient
+// per page — heavy but bounded, and it only engages beyond standard paper
+// (Letter/Arch keep the full 480 DPI target). The ratio may still fall below 1
+// at the 200in/side extreme — Chrome physically cannot raster larger, so the
+// old Math.max(1, …) floor there only bought broken output for more memory.
+const PDF_PAGE_RASTER_BUDGET = {
+  maxDimensionPx: 16000,
+  maxAreaPx: 160_000_000,
+};
 
 // ─── Inter font embedding for jsPDF ───
 
@@ -774,7 +780,7 @@ export async function exportPdf(
       CSSStyleDeclaration.prototype.getPropertyValue = function (prop) {
         return origGetPropertyValue.call(this, prop) ?? '';
       };
-      const pixelRatio = capExportPixelRatio(TARGET_PIXEL_RATIO, contentWPx, contentHPx);
+      const pixelRatio = capExportPixelRatio(TARGET_PIXEL_RATIO, contentWPx, contentHPx, PDF_PAGE_RASTER_BUDGET);
       // Freeze var(--color-…) strokes to concrete colors so Chromium's
       // html-to-image clone keeps the connection lines (#173).
       const restoreColors = freezeSvgColors(viewportEl);

@@ -11,6 +11,7 @@ placing devices and setting port types than actually testing.
 | --- | --- |
 | Local dev (`./start-dev.sh`) | **File ▸ Load Test Schematic** — shown only in dev builds |
 | Any build, incl. beta | append `?fixture=test` to the URL, e.g. `https://beta.easyschematic.live/?fixture=test` |
+| Stress fixture | append `?fixture=stress` — a generated 120-device grid (`stress.ts`, not committed JSON) for scale-only items: mass drags, marquee sweeps, big-bounds exports (#383/#384). Guarded by `stressFixture.test.ts`. |
 
 Both replace the current schematic outright, exactly as File ▸ Open does. The
 URL flag is stripped after loading, so a reload doesn't wipe your work a second
