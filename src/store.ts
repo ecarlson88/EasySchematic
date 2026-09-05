@@ -2168,7 +2168,11 @@ export const useSchematicStore = create<SchematicState>((set, get) => ({
       ? syncEdgesFromWaypointNodes(oldEdges, normalized)
       : oldEdges;
     set({ nodes: normalized, ...(newEdges !== oldEdges ? { edges: newEdges } : {}) });
-    get().saveToLocalStorage();
+    // A drag streams position changes every frame; serializing the whole schematic
+    // to localStorage on each one thrashed RAM on large multi-selections (#384).
+    // The drag-end change arrives with dragging=false, so the save still lands.
+    const midDrag = changes.some((c) => c.type === "position" && c.dragging);
+    if (!midDrag) get().saveToLocalStorage();
   },
 
   onEdgesChange: (changes) => {
