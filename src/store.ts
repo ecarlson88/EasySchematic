@@ -2168,11 +2168,15 @@ export const useSchematicStore = create<SchematicState>((set, get) => ({
       ? syncEdgesFromWaypointNodes(oldEdges, normalized)
       : oldEdges;
     set({ nodes: normalized, ...(newEdges !== oldEdges ? { edges: newEdges } : {}) });
-    // A drag streams position changes every frame; serializing the whole schematic
-    // to localStorage on each one thrashed RAM on large multi-selections (#384).
-    // The drag-end change arrives with dragging=false, so the save still lands.
-    const midDrag = changes.some((c) => c.type === "position" && c.dragging);
-    if (!midDrag) get().saveToLocalStorage();
+    // A drag streams position changes every frame, and a marquee sweep streams
+    // selection batches as nodes enter it; serializing the whole schematic to
+    // localStorage on each one thrashed RAM on large multi-selections (#384).
+    // The drag-end change arrives with dragging=false so that save still lands,
+    // and selection isn't meaningful persisted state to begin with.
+    const transient = changes.every(
+      (c) => c.type === "select" || (c.type === "position" && c.dragging),
+    );
+    if (!transient) get().saveToLocalStorage();
   },
 
   onEdgesChange: (changes) => {
@@ -2191,7 +2195,9 @@ export const useSchematicStore = create<SchematicState>((set, get) => ({
     } else {
       set({ edges: newEdges });
     }
-    get().saveToLocalStorage();
+    // Selection-only batches skip the save: `selected` is stripped from persisted
+    // edges anyway, and a marquee sweep streams these while it grows (#384).
+    if (!changes.every((c) => c.type === "select")) get().saveToLocalStorage();
   },
 
   onConnect: (connection) => {
