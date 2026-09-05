@@ -40,6 +40,17 @@ describe("stress fixture", () => {
     }
   });
 
+  it("edges match the app's real edge shape (no type, inline var() stroke)", () => {
+    // Caught as wireless PNG exports on the 2026-09-05-2 test pass: an
+    // unregistered `type` falls back to React Flow's default bezier, and a
+    // missing inline stroke leaves the wire on a stylesheet var() that
+    // Chromium's html-to-image clone drops (#173).
+    for (const e of file.edges) {
+      expect(e.type).toBeUndefined();
+      expect(e.style?.stroke).toMatch(/^var\(--color-[a-z-]+\)$/);
+    }
+  });
+
   it("is deterministic — two builds are identical", () => {
     expect(buildStressSchematic()).toEqual(file);
   });

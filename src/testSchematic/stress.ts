@@ -60,14 +60,21 @@ export function buildStressSchematic(): SchematicFile {
   // every wire is signal-valid and the router gets long multi-column runs.
   for (let i = 0; i + SIGNALS.length < nodes.length; i++) {
     const j = i + SIGNALS.length;
+    // Shape matches schematic.json exactly — the 2026-09-05-2 pass caught two
+    // divergences as wireless PNG exports: an unregistered `type` falls back to
+    // React Flow's default bezier, and a missing inline `style.stroke` leaves
+    // the wire on React Flow's stylesheet var() default, which Chromium's
+    // html-to-image clone drops (#173 — freezeSvgColors freezes inline strokes
+    // only, because every app-created edge carries one).
+    const signal = SIGNALS[i % SIGNALS.length];
     edges.push({
       id: `stress-edge-${i}`,
       source: `stress-${i}`,
       sourceHandle: `s${i}-out`,
       target: `stress-${j}`,
       targetHandle: `s${j}-in`,
-      type: "custom",
-      data: { signalType: SIGNALS[i % SIGNALS.length] },
+      style: { stroke: `var(--color-${signal})`, strokeWidth: 2 },
+      data: { signalType: signal },
     } as ConnectionEdge);
   }
 
