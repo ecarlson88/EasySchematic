@@ -107,7 +107,7 @@ export default function ConnectionsPage() {
       <ul>
         <li><strong>Break-in devices</strong> fan out individual connections into a trunk</li>
         <li><strong>Break-out devices</strong> split a trunk back into individual connections</li>
-        <li>Trunk connections display as thicker lines on the canvas</li>
+        <li>Trunk ports only connect to other trunk ports — a trunk can't land on a normal device port</li>
         <li>Right-click a trunk connection to set a <strong>cable label</strong></li>
       </ul>
 
