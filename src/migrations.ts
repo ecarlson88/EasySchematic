@@ -988,5 +988,22 @@ export function migrateSchematic(data: any): any {
     if (changed) data = { ...data, nodes };
   }
 
+  // Version-independent invariant: `selected` is transient UI state. Saves now
+  // strip it (#384 follow-up), but autosaves and exported files written before
+  // that fix still carry it — restoring one would resurrect a stale selection
+  // that the next Delete keypress operates on. Strip on the way in so legacy
+  // blobs are healed forever.
+  for (const key of ["nodes", "edges"] as const) {
+    if (!Array.isArray(data[key])) continue;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- loosely-typed migration element
+    if (data[key].some((el: any) => el?.selected !== undefined)) {
+      data = {
+        ...data,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- loosely-typed migration element
+        [key]: data[key].map(({ selected: _s, ...rest }: any) => rest),
+      };
+    }
+  }
+
   return data;
 }
