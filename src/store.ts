@@ -1114,7 +1114,8 @@ function scheduleAutosave() {
     useSchematicStore.getState().saveToLocalStorage();
   }, AUTOSAVE_DEBOUNCE_MS);
 }
-function flushAutosave() {
+/** Exported as a test seam — production callers are the pagehide/hidden listeners below. */
+export function flushAutosave() {
   if (autosaveTimer === null) return;
   clearTimeout(autosaveTimer);
   autosaveTimer = null;
@@ -6152,6 +6153,12 @@ export const useSchematicStore = create<SchematicState>((set, get) => ({
   },
 
   saveToLocalStorage: () => {
+    // A save of current state supersedes any pending debounced autosave — clear it so a
+    // discrete action right after a gesture doesn't re-serialize the document 250ms later.
+    if (autosaveTimer !== null) {
+      clearTimeout(autosaveTimer);
+      autosaveTimer = null;
+    }
     if (deferredSave) {
       deferredSave.pending = true;
       return;
