@@ -288,6 +288,17 @@ const barEdisonIn = port("bar-edison-in", "Edison In", "power", "input", "edison
 const barEdisonOut1 = port("bar-edison-out-1", "Edison Out 1", "power", "output", "edison");
 const barEdisonOut2 = port("bar-edison-out-2", "Edison Out 2", "power", "output", "edison");
 
+// EU / UK power bench (#390) — Schuko native-mates Europlug (direct connect, no
+// adapter, no dialog), while UK BS 1363 needs an adapter for everything. The
+// library carries no EU/UK power adapter template yet, so UK ↔ Schuko exercises
+// the zero-match incompatible-connection dialog rather than an auto-insert.
+const euStripSchukoIn = port("eustrip-schuko-in", "Schuko In", "power", "input", "schuko");
+const euStripSchukoOut1 = port("eustrip-schuko-out-1", "Schuko Out 1", "power", "output", "schuko");
+const euStripSchukoOut2 = port("eustrip-schuko-out-2", "Schuko Out 2", "power", "output", "schuko");
+const euPsuEuroplugIn = port("eupsu-europlug-in", "Europlug AC In", "power", "input", "europlug");
+const ukPlayerUkIn = port("ukplayer-uk-in", "UK AC In", "power", "input", "uk-power");
+const ukPlayerHdmiOut = port("ukplayer-hdmi-out", "HDMI Out", "hdmi", "output", "hdmi");
+
 // Audio bench — the XLR-3 ↔ 1/4" TRS mirrored pair
 const fohXlrOutL = port("foh-xlr-out-l", "XLR Out L", "analog-audio", "output", "xlr-3");
 const fohXlrOutR = port("foh-xlr-out-r", "XLR Out R", "analog-audio", "output", "xlr-3");
@@ -617,6 +628,55 @@ const rackRoom: RoomSpec = {
           manufacturer: "TestCo",
           modelNumber: "PP-8U",
           unitCost: 240,
+          auxiliaryData: [{ text: "{{deviceType}}", position: "header" }],
+        },
+      },
+    ],
+    [
+      {
+        // Schuko side of the EU/UK power bench (#390). Unwired, adjacent to its
+        // two sinks one column over, so a future adapter auto-insert has the
+        // COL_GAP to land in — same shape as the Edison ↔ IEC bench.
+        id: "device-22",
+        label: "Euro Power Strip (Schuko)",
+        ports: [euStripSchukoIn, euStripSchukoOut1, euStripSchukoOut2],
+        data: {
+          deviceType: "power-distribution",
+          model: "Euro Power Strip (Schuko)",
+          manufacturer: "TestCo",
+          modelNumber: "EPS-3",
+          voltage: "230V",
+          auxiliaryData: [{ text: "{{deviceType}}", position: "header" }],
+        },
+      },
+    ],
+    [
+      {
+        // Europlug native-mates into a Schuko socket — Schuko Out → this port
+        // must connect directly, with no adapter and no dialog.
+        id: "device-23",
+        label: "EU PSU (Europlug)",
+        ports: [euPsuEuroplugIn],
+        data: {
+          deviceType: "power-supply",
+          model: "EU PSU (Europlug)",
+          manufacturer: "TestCo",
+          modelNumber: "PSU-EU-65",
+          auxiliaryData: [{ text: "{{deviceType}}", position: "header" }],
+        },
+      },
+      {
+        // Shuttered BS 1363 sockets have no native mate — Schuko Out → this
+        // port must flag adapter-needed (today: the zero-match dialog, since
+        // no EU/UK adapter template exists in the library yet).
+        id: "device-24",
+        label: "UK Media Player (BS 1363)",
+        ports: [ukPlayerUkIn, ukPlayerHdmiOut],
+        data: {
+          deviceType: "media-player",
+          model: "UK Media Player (BS 1363)",
+          manufacturer: "TestCo",
+          modelNumber: "MP-UK-4K",
           auxiliaryData: [{ text: "{{deviceType}}", position: "header" }],
         },
       },

@@ -74,6 +74,12 @@ the fixture, a test fails rather than a test pass quietly losing coverage.
   (`FOH Console` ↔ `Playback Deck`), and Edison ↔ IEC
   (`Rack UPS` ↔ `Powered Speaker` / `Utility Bar`). The mirrored families are
   the regression guard the auto-insert pairings depend on.
+- **EU/UK power bench (#390).** `Euro Power Strip (Schuko)` paired with
+  `EU PSU (Europlug)` (native mate — must connect with no adapter and no
+  dialog) and `UK Media Player (BS 1363)` (adapter-needed — today the
+  zero-match incompatible-connection dialog, since the library has no EU/UK
+  power adapter template yet; the guard test pins that state and flags when a
+  template appears).
 - **Patch panel.** `PP-01` carries eight passthrough ports spanning Cat6,
   etherCON, BNC, XLR-3, LC fiber, two half-normalled TRS and a
   terminal-block/Phoenix pair, with front/rear connector and gender mismatches.

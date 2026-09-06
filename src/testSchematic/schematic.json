@@ -431,12 +431,12 @@
         "locked": true
       },
       "style": {
-        "width": 1232,
+        "width": 2224,
         "height": 784
       },
       "zIndex": -1,
       "measured": {
-        "width": 1232,
+        "width": 2224,
         "height": 784
       }
     },
@@ -910,10 +910,137 @@
       }
     },
     {
+      "id": "device-22",
+      "type": "device",
+      "position": {
+        "x": 1520,
+        "y": 96
+      },
+      "parentId": "room-2",
+      "measured": {
+        "width": 176,
+        "height": 80
+      },
+      "data": {
+        "label": "Euro Power Strip (Schuko)",
+        "ports": [
+          {
+            "id": "eustrip-schuko-in",
+            "label": "Schuko In",
+            "signalType": "power",
+            "direction": "input",
+            "connectorType": "schuko"
+          },
+          {
+            "id": "eustrip-schuko-out-1",
+            "label": "Schuko Out 1",
+            "signalType": "power",
+            "direction": "output",
+            "connectorType": "schuko"
+          },
+          {
+            "id": "eustrip-schuko-out-2",
+            "label": "Schuko Out 2",
+            "signalType": "power",
+            "direction": "output",
+            "connectorType": "schuko"
+          }
+        ],
+        "deviceType": "power-distribution",
+        "model": "Euro Power Strip (Schuko)",
+        "manufacturer": "TestCo",
+        "modelNumber": "EPS-3",
+        "voltage": "230V",
+        "auxiliaryData": [
+          {
+            "text": "{{deviceType}}",
+            "position": "header"
+          }
+        ]
+      }
+    },
+    {
+      "id": "device-23",
+      "type": "device",
+      "position": {
+        "x": 2016,
+        "y": 96
+      },
+      "parentId": "room-2",
+      "measured": {
+        "width": 176,
+        "height": 64
+      },
+      "data": {
+        "label": "EU PSU (Europlug)",
+        "ports": [
+          {
+            "id": "eupsu-europlug-in",
+            "label": "Europlug AC In",
+            "signalType": "power",
+            "direction": "input",
+            "connectorType": "europlug"
+          }
+        ],
+        "deviceType": "power-supply",
+        "model": "EU PSU (Europlug)",
+        "manufacturer": "TestCo",
+        "modelNumber": "PSU-EU-65",
+        "auxiliaryData": [
+          {
+            "text": "{{deviceType}}",
+            "position": "header"
+          }
+        ]
+      }
+    },
+    {
+      "id": "device-24",
+      "type": "device",
+      "position": {
+        "x": 2016,
+        "y": 320
+      },
+      "parentId": "room-2",
+      "measured": {
+        "width": 176,
+        "height": 64
+      },
+      "data": {
+        "label": "UK Media Player (BS 1363)",
+        "ports": [
+          {
+            "id": "ukplayer-uk-in",
+            "label": "UK AC In",
+            "signalType": "power",
+            "direction": "input",
+            "connectorType": "uk-power"
+          },
+          {
+            "id": "ukplayer-hdmi-out",
+            "label": "HDMI Out",
+            "signalType": "hdmi",
+            "direction": "output",
+            "connectorType": "hdmi"
+          }
+        ],
+        "deviceType": "media-player",
+        "model": "UK Media Player (BS 1363)",
+        "manufacturer": "TestCo",
+        "modelNumber": "MP-UK-4K",
+        "auxiliaryData": [
+          {
+            "text": "{{deviceType}}",
+            "position": "header"
+          }
+        ]
+      }
+    },
+    {
       "id": "room-3",
       "type": "room",
       "position": {
-        "x": 2848,
+        "x": 3840,
         "y": 0
       },
       "data": {

@@ -16,8 +16,10 @@ import { CURRENT_SCHEMA_VERSION } from "../migrations";
 import { computeDeviceHandles } from "../routingHarness/deviceHandleLayout";
 import { inventoryKeyFromDeviceData, inventoryKeyFromTemplate } from "../inventoryKey";
 import {
+  areConnectorsCompatible,
   findAdaptersForConnectorBridge,
   findAdaptersForSignalBridge,
+  needsAdapter,
 } from "../connectorTypes";
 import { DEVICE_TEMPLATES } from "../deviceLibrary";
 import type { ConnectorType, DeviceData, Port, SchematicNode } from "../types";
@@ -178,6 +180,26 @@ describe("test schematic — #307 coverage", () => {
     expect(free("edison", "input"), "no free Edison input").toBeDefined();
     expect(findAdaptersForConnectorBridge("edison", "iec", "power", DEVICE_TEMPLATES).length).toBeGreaterThan(0);
     expect(findAdaptersForConnectorBridge("iec", "edison", "power", DEVICE_TEMPLATES).length).toBeGreaterThan(0);
+  });
+
+  it("offers the EU/UK power bench, unwired (#390)", () => {
+    const used = usedPortIds();
+    const free = (connector: ConnectorType, direction: Port["direction"]) =>
+      allPorts.find((p) => p.connectorType === connector && p.direction === direction && !used.has(p.id));
+    expect(free("schuko", "output"), "no free Schuko output").toBeDefined();
+    expect(free("schuko", "input"), "no free Schuko input").toBeDefined();
+    expect(free("europlug", "input"), "no free Europlug input").toBeDefined();
+    expect(free("uk-power", "input"), "no free UK Power input").toBeDefined();
+    // Europlug → Schuko is a NATIVE mate: the bench run must connect with no
+    // adapter and no dialog.
+    expect(areConnectorsCompatible("europlug", "schuko")).toBe(true);
+    expect(needsAdapter("europlug", "schuko")).toBe(false);
+    // UK ↔ Schuko needs an adapter, and the library carries no EU/UK power
+    // adapter template yet — the bench exercises the zero-match dialog. If this
+    // second expectation starts failing, a template was added: promote the bench
+    // to a real auto-insert test and update the fixture README.
+    expect(needsAdapter("uk-power", "schuko")).toBe(true);
+    expect(findAdaptersForConnectorBridge("uk-power", "schuko", "power", DEVICE_TEMPLATES)).toHaveLength(0);
   });
 
   it("has a patch panel with wide connector and gender combinations", () => {
