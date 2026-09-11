@@ -154,7 +154,8 @@ export function buildObstacles(
       n.type === "note" ||
       n.type === "stub-label" ||
       n.type === "waypoint" ||
-      n.type === "bundle-junction"
+      n.type === "bundle-junction" ||
+      n.type === "image"
     ) continue;
     if (excludeIds.length > 0 && excludeIds.includes(n.id)) continue;
     const pos = getAbsPos(n);
